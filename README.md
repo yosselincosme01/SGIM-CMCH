@@ -42,6 +42,14 @@ npm ci
 npm run dev
 ```
 
+## Pruebas y calidad
+
+- Backend: `pytest` y `ruff check .` (desde `backend/` con el entorno activado).
+- Frontend: `npm test`, `npm run lint` y `npm run build` (desde `frontend/`).
+- La API de salud responde en `GET /api/v1/health/`.
+
+Guía completa para PowerShell: [docs/pruebas.md](docs/pruebas.md).
+
 ## Datos
 
 No se deben usar datos reales de pacientes en desarrollo, pruebas ni fixtures.

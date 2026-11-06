@@ -2,29 +2,24 @@
 Configuración común a todos los entornos de SGIM-CMCH.
 
 Los valores sensibles o dependientes del entorno se leen de variables de
-entorno. En desarrollo se cargan desde ``backend/.env`` (no versionado);
-consulta ``backend/.env.example`` para ver las variables disponibles.
+entorno. Solo ``dev.py`` carga ``backend/.env`` (no versionado); ``test.py``
+y ``prod.py`` nunca lo leen. Consulta ``backend/.env.example``.
 """
 
 import os
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
-from dotenv import load_dotenv
 
 # backend/
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
-
-# Las variables ya definidas en el entorno tienen prioridad sobre el archivo.
-load_dotenv(BASE_DIR / ".env", override=False)
 
 
 def env(name: str, default: str | None = None, *, required: bool = False) -> str | None:
     value = os.getenv(name, default)
     if required and not value:
         raise ImproperlyConfigured(
-            f"La variable de entorno {name} es obligatoria. "
-            "Consulta backend/.env.example."
+            f"La variable de entorno {name} es obligatoria. Consulta backend/.env.example."
         )
     return value
 
@@ -59,9 +54,13 @@ DJANGO_APPS = [
     "django.contrib.staticfiles",
 ]
 
-THIRD_PARTY_APPS: list[str] = []
+THIRD_PARTY_APPS = [
+    "rest_framework",
+]
 
-LOCAL_APPS: list[str] = []
+LOCAL_APPS = [
+    "apps.core",
+]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
 
@@ -141,6 +140,28 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
+
+
+# --- API REST (Django REST Framework) --------------------------------------
+# Política segura por defecto: todo endpoint exige autenticación salvo que
+# declare explícitamente lo contrario (p. ej. el endpoint de salud).
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework.authentication.SessionAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.IsAuthenticated",
+    ],
+    "DEFAULT_RENDERER_CLASSES": [
+        "rest_framework.renderers.JSONRenderer",
+    ],
+    "DEFAULT_PARSER_CLASSES": [
+        "rest_framework.parsers.JSONParser",
+    ],
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
+}
 
 
 # --- Cabeceras de seguridad comunes ----------------------------------------
