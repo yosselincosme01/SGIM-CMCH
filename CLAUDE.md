@@ -20,6 +20,16 @@ Monorepo con un monolito modular: `backend/` (Python 3.14, Django 6, DRF, Postgr
    - que no haya secretos ni archivos sensibles preparados para Git.
 6. Claude entrega los comandos exactos de **PowerShell** para cada operación de Git, con una breve explicación de cada uno.
 7. Claude no pasa a la siguiente etapa hasta que la responsable confirme que terminó las operaciones de Git.
+8. Claude nunca ejecuta operaciones de Git que modifiquen el repositorio; la responsable las realiza manualmente.
+
+## Mensajes de commit
+
+- Siempre en **inglés**.
+- Formato [Conventional Commits](https://www.conventionalcommits.org/): `tipo(ámbito opcional): descripción`.
+- Tipos: `feat`, `fix`, `chore`, `refactor`, `test`, `docs`, `style`, `perf`, `build`, `ci`, `revert`.
+- Breves, descriptivos y en **minúsculas**, sin punto final.
+- Ejemplos: `chore: initial secure project setup`, `feat(incidents): add incident creation endpoint`.
+- Cuando corresponda un commit, Claude entrega el comando exacto de PowerShell, por ejemplo: `git commit -m "chore: initial secure project setup"`.
 
 ## Estrategia de ramas: Git Flow simplificado
 
