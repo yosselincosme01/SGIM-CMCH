@@ -18,6 +18,8 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.{test,spec}.{ts,tsx}'],
+    // Solo se procesa la hoja de estilos global, para verificar los tokens de marca.
+    css: { include: [/src\/styles\/index\.css/] },
     restoreMocks: true,
     coverage: {
       provider: 'v8',

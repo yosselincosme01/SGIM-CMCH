@@ -39,8 +39,12 @@ Módulos de configuración (`DJANGO_SETTINGS_MODULE`):
 ```bash
 cd frontend
 npm ci
-npm run dev
+npm run dev        # http://localhost:5173 (requiere Django en http://127.0.0.1:8000)
 ```
+
+- Vite redirige `/api` a Django (mismo origen: la cookie de sesión y CSRF funcionan sin CORS).
+- Si Django usa otro puerto: `VITE_API_PROXY_TARGET=http://127.0.0.1:8010 npm run dev`.
+- Detalles de la interfaz de autenticación: [docs/frontend-autenticacion.md](docs/frontend-autenticacion.md).
 
 ## Pruebas y calidad
 
