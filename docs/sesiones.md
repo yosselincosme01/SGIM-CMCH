@@ -80,11 +80,11 @@ Requiere sesión. Es pasiva: consultarla no cuenta como actividad.
   reloj del equipo.
 - No expone el identificador de sesión ni datos del usuario.
 
-## Uso previsto desde React (contrato para la futura rama del frontend)
+## Contrato con React (implementado en `frontend/`)
 
 El servidor no puede saber si una petición la originó una persona o un temporizador. Por
-eso el frontend **debe** cumplir estas reglas, y la rama del frontend incluirá pruebas que
-las verifiquen.
+eso el frontend **debe** cumplir estas reglas. Están implementadas y verificadas con pruebas
+(ver [docs/frontend-autenticacion.md](frontend-autenticacion.md)).
 
 1. **Un único cliente de API** (`src/shared/api`) con dos funciones explícitas:
    - `apiRequest()`: peticiones originadas por el usuario (navegar, guardar, filtrar).
