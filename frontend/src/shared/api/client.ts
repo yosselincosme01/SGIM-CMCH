@@ -64,7 +64,9 @@ async function send<T>(path: string, options: InternalOptions): Promise<T> {
   const url = buildUrl(path) // valida la ruta antes de cualquier petición
   const method = options.method ?? 'GET'
   const headers = new Headers({ Accept: 'application/json' })
-  if (options.body !== undefined) headers.set('Content-Type', 'application/json')
+  // FormData (archivos): el navegador fija Content-Type con el boundary multipart.
+  const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
+  if (options.body !== undefined && !isFormData) headers.set('Content-Type', 'application/json')
   if (options.passive) headers.set(PASSIVE_HEADER_NAME, '1')
   if (UNSAFE_METHODS.has(method)) {
     const token = readCsrfToken()
@@ -82,7 +84,12 @@ async function send<T>(path: string, options: InternalOptions): Promise<T> {
     response = await fetch(url, {
       method,
       headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body),
+      body:
+        options.body === undefined
+          ? undefined
+          : isFormData
+            ? (options.body as FormData)
+            : JSON.stringify(options.body),
       credentials: 'same-origin',
       cache: 'no-store',
       redirect: 'error',

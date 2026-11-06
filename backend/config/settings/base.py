@@ -61,6 +61,8 @@ THIRD_PARTY_APPS = [
 LOCAL_APPS = [
     "apps.core",
     "apps.accounts",
+    "apps.catalogs",
+    "apps.incidents",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -146,6 +148,11 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
+# Las evidencias NO se publican en MEDIA_URL: se sirven solo mediante
+# /api/v1/incidents/<código>/attachments/<id>/, que comprueba los permisos.
+
+# Tamaño máximo de una imagen de evidencia (bytes). Por defecto, 5 MB.
+INCIDENT_ATTACHMENT_MAX_BYTES = int(env("INCIDENT_ATTACHMENT_MAX_BYTES", str(5 * 1024 * 1024)))
 
 
 # --- API REST (Django REST Framework) --------------------------------------

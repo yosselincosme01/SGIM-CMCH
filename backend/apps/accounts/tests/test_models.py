@@ -79,9 +79,23 @@ UNIT_HINTS = ("ups", "servicio", "unidad", "area", "sede")
 
 
 def test_user_has_no_unit_fields():
-    words = {word for field in User._meta.get_fields() for word in field.name.lower().split("_")}
+    """Los campos propios del usuario no incluyen UPS/servicio/unidad/sede."""
+    words = {
+        word
+        for field in User._meta.get_fields()
+        if field.concrete
+        for word in field.name.lower().split("_")
+    }
 
     assert words.isdisjoint(UNIT_HINTS)
+
+
+def test_user_is_not_related_to_care_units():
+    """Ninguna relación (directa o inversa) vincula al usuario con una UPS (CareUnit)."""
+    from apps.catalogs.models import CareUnit
+
+    related = {field.related_model for field in User._meta.get_fields() if field.is_relation}
+    assert CareUnit not in related
 
 
 def test_user_has_no_mandatory_relations():

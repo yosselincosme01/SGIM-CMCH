@@ -1,0 +1,409 @@
+/*
+ * Estilos del módulo de incidencias. Usa los tokens de diseño de index.css
+ * (colores, espaciado, radios); no define colores propios.
+ */
+
+/* --- Campos adicionales ---------------------------------------------------- */
+
+.field__optional {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.field__textarea {
+  min-height: 7rem;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.field__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.field__counter {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Formulario --------------------------------------------------------------- */
+
+.form-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.form-section {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.form-section + .form-section {
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--color-border);
+}
+
+.form-section__title {
+  padding: 0;
+  margin-bottom: var(--space-2);
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--space-3);
+}
+
+.choice {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-4) var(--space-4) 3rem;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.choice input {
+  position: absolute;
+  left: var(--space-4);
+  top: calc(var(--space-4) + 0.2rem);
+  width: 1.15rem;
+  height: 1.15rem;
+  margin: 0;
+  accent-color: var(--color-primary);
+}
+
+.choice:has(input:focus-visible) {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.choice--selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.choice__title {
+  font-weight: 700;
+}
+
+.choice__hint {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.file-input {
+  font: inherit;
+  max-width: 100%;
+}
+
+.file-input::file-selector-button {
+  margin-right: var(--space-3);
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-4);
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.file-selected {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-small);
+  overflow-wrap: anywhere;
+}
+
+.form-actions,
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+.actions {
+  justify-content: flex-start;
+}
+
+.page__header--with-action {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-6) 0;
+  color: var(--color-text-muted);
+}
+
+/* --- Confirmación ------------------------------------------------------------- */
+
+.confirmation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-top: 5px solid var(--color-success);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.confirmation__eyebrow {
+  color: var(--color-success);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.85rem;
+}
+
+.confirmation__title {
+  font-size: 1.5rem;
+}
+
+.confirmation__title:focus {
+  outline: none;
+}
+
+.confirmation__label {
+  color: var(--color-text-muted);
+  margin-top: var(--space-2);
+}
+
+.confirmation__code {
+  font-size: clamp(1.6rem, 1.2rem + 2vw, 2.25rem);
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Tabla de incidencias (tarjetas en móvil) ---------------------------------- */
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.data-table th,
+.data-table td {
+  padding: var(--space-3) var(--space-4);
+  text-align: left;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.data-table thead th {
+  background: var(--color-surface-muted);
+  font-size: 0.9rem;
+}
+
+.data-table__code {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 40rem) {
+  .data-table,
+  .data-table tbody,
+  .data-table tr,
+  .data-table th,
+  .data-table td {
+    display: block;
+  }
+
+  .data-table {
+    border: 0;
+    background: transparent;
+  }
+
+  .data-table thead {
+    display: none;
+  }
+
+  .data-table tr {
+    margin-bottom: var(--space-3);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+  }
+
+  .data-table tr > *:last-child {
+    border-bottom: 0;
+  }
+
+  .data-table td::before {
+    content: attr(data-label);
+    display: block;
+    color: var(--color-text-muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+  }
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+}
+
+.empty-state {
+  padding: var(--space-6);
+  text-align: center;
+  background: var(--color-surface);
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius);
+}
+
+.empty-state__title {
+  font-size: 1.15rem;
+  margin-bottom: var(--space-2);
+}
+
+/* --- Detalle ------------------------------------------------------------------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  background: var(--color-info-soft);
+  color: var(--color-info);
+  white-space: nowrap;
+}
+
+.detail-card {
+  padding: var(--space-5) var(--space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.detail-card__title {
+  font-size: 1.1rem;
+  margin-bottom: var(--space-4);
+}
+
+.detail-grid {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: var(--space-4) var(--space-6);
+}
+
+.detail-grid dt {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.detail-grid dd {
+  margin: var(--space-1) 0 0;
+}
+
+.detail-grid__wide {
+  grid-column: 1 / -1;
+}
+
+.preserve-lines {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.muted {
+  color: var(--color-text-muted);
+}
+
+.evidence-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-4);
+}
+
+.evidence__image {
+  display: block;
+  max-width: min(100%, 32rem);
+  height: auto;
+  border-radius: var(--radius-small);
+  border: 1px solid var(--color-border);
+}
+
+.evidence__meta {
+  margin-top: var(--space-2);
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+.timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 var(--space-4);
+  border-left: 2px solid var(--color-border);
+}
+
+.timeline__item {
+  display: flex;
+  flex-direction: column;
+}
+
+.timeline__label {
+  font-weight: 700;
+}
+
+.timeline__meta {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+@media (max-width: 40rem) {
+  .form-card,
+  .detail-card,
+  .confirmation {
+    padding: var(--space-5) var(--space-4);
+  }
+
+  .form-actions .btn,
+  .actions .btn {
+    flex: 1 1 100%;
+  }
+}

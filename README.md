@@ -54,6 +54,8 @@ npm run dev        # http://localhost:5173 (requiere Django en http://127.0.0.1:
 - Autenticación por sesión: `/api/v1/auth/csrf/`, `login/`, `logout/`, `me/` y `session/` ([ADR 0002](docs/adr/0002-autenticacion-y-roles.md)).
 - Política de sesión (8 h absolutas y 30 min de inactividad): [docs/sesiones.md](docs/sesiones.md).
 
+- Incidencias (registro y consulta): [ADR 0003](docs/adr/0003-incidencias.md).
+
 Guía completa para PowerShell: [docs/pruebas.md](docs/pruebas.md).
 
 ## Datos
