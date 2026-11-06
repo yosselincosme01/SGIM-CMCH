@@ -23,6 +23,8 @@ cd backend
 pytest                                       # todas las pruebas
 pytest apps/core                             # solo una app
 pytest -k health                             # pruebas cuyo nombre contiene "health"
+pytest -m "not django_db"                    # solo las pruebas que no usan base de datos
+pytest -m django_db                          # solo las que usan base (crean y eliminan sgim_test)
 pytest --cov --cov-report=term-missing       # con cobertura
 
 ruff check .                                 # análisis estático (errores, seguridad, imports)
@@ -33,17 +35,35 @@ ruff format .                                # aplica el formato
 
 ### Aislamiento del entorno de pruebas
 
-- pytest usa `config.settings.test` (definido en `backend/pyproject.toml`).
+- pytest usa siempre `config.settings.test`. La opción `--ds` está fijada en
+  `backend/pyproject.toml`, así que una variable `DJANGO_SETTINGS_MODULE` de la terminal
+  no puede sustituirla.
 - `config.settings.test` **nunca lee `backend/.env`**. Usa valores ficticios por defecto,
   que se pueden sobrescribir con variables de entorno (por ejemplo, en CI).
-- La base de pruebas es `sgim_test` (variable `TEST_DB_NAME`). Si alguien intenta usar
-  `sgim_dev`, `sgim` o `postgres`, la configuración falla de inmediato.
+- **Nombre exacto de la base:** `sgim_test`. Django **no** añade el prefijo `test_` porque
+  `TEST.NAME` está definido explícitamente. `DB_NAME` se ignora en las pruebas.
+- **Lista de nombres permitidos** (`config/test_safety.py`): solo `sgim_test` o
+  `sgim_test_<sufijo>`. Cualquier otro nombre (`sgim_dev`, `sgim_app`, `test_sgim_app`…)
+  aborta la ejecución.
+- **Comprobación antes de iniciar** (`backend/conftest.py`): antes de crear o tocar
+  ninguna base, pytest aborta con código 4 si:
+  - el módulo de configuración no es el de pruebas;
+  - se usa `--reuse-db` (incluida la variable `PYTEST_ADDOPTS`);
+  - el rol de conexión es `postgres`;
+  - o el nombre de la base no está permitido.
+- No uses `python manage.py test` (permite `--keepdb`). Las pruebas se ejecutan solo con `pytest`.
 - pytest-django **bloquea el acceso a la base de datos** salvo en las pruebas marcadas con
-  `@pytest.mark.django_db`. Las pruebas actuales no usan la base.
+  `@pytest.mark.django_db`.
+- Las pruebas de expiración de sesión usan un reloj simulado (fixture `clock` en
+  `apps/accounts/tests/conftest.py`): recorren 8 horas o 30 minutos sin esperar.
 
-> Cuando existan pruebas con `django_db`, pytest-django creará `sgim_test` en PostgreSQL y
-> la eliminará al terminar. El usuario de base de datos necesitará permiso `CREATEDB`.
-> Esa configuración debe autorizarse antes de hacerse.
+> **Importante:** pytest-django crea `sgim_test` al empezar y la **elimina** al terminar.
+> Si ya existe, la borra y la vuelve a crear. Por eso el nombre se valida con la lista de
+> permitidos, y el rol `sgim_test` no tiene acceso a las bases de desarrollo.
+
+### Procedimiento seguro con PostgreSQL
+
+Ver el procedimiento paso a paso en [docs/pruebas-postgresql.md](pruebas-postgresql.md).
 
 ## Frontend (Vitest y React Testing Library)
 

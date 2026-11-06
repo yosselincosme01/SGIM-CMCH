@@ -1,6 +1,6 @@
 # ADR 0001 — Modelo de usuario personalizado sobre una base ya migrada
 
-- **Estado:** propuesto (pendiente de aprobación)
+- **Estado:** reemplazado por [ADR 0002](0002-autenticacion-y-roles.md). No se aplicó: se optó por una base nueva.
 - **Fecha:** 2026-11-06
 
 ## Contexto

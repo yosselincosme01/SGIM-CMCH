@@ -60,6 +60,7 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     "apps.core",
+    "apps.accounts",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
@@ -70,6 +71,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "apps.accounts.middleware.SessionPolicyMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -113,6 +115,10 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 
 # --- Autenticación ----------------------------------------------------------
+# Modelo de usuario propio (ver docs/adr/0002). Debe existir desde la primera
+# migración de la base de datos.
+
+AUTH_USER_MODEL = "accounts.User"
 
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -148,7 +154,7 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
-        "rest_framework.authentication.SessionAuthentication",
+        "apps.accounts.authentication.SessionAuthentication",
     ],
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.IsAuthenticated",
@@ -161,7 +167,43 @@ REST_FRAMEWORK = {
     ],
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 20,
+    "EXCEPTION_HANDLER": "apps.accounts.exceptions.api_exception_handler",
+    "DEFAULT_THROTTLE_RATES": {
+        "login": env("DJANGO_LOGIN_THROTTLE_RATE", "5/min"),
+    },
 }
+
+
+# --- Sesión y CSRF ----------------------------------------------------------
+# Autenticación por sesión en el mismo origen que el frontend (ver docs/adr/0002).
+#
+# Política de sesión (apps.accounts.session_policy), verificada en el servidor:
+# - SGIM_SESSION_ABSOLUTE_TIMEOUT: duración máxima desde el inicio de sesión.
+#   La actividad NO la amplía.
+# - SGIM_SESSION_IDLE_TIMEOUT: inactividad máxima desde la última actividad válida.
+# La sesión expira al alcanzar cualquiera de los dos.
+
+SGIM_SESSION_ABSOLUTE_TIMEOUT = int(env("SGIM_SESSION_ABSOLUTE_TIMEOUT", str(8 * 60 * 60)))
+SGIM_SESSION_IDLE_TIMEOUT = int(env("SGIM_SESSION_IDLE_TIMEOUT", str(30 * 60)))
+
+if not 0 < SGIM_SESSION_IDLE_TIMEOUT <= SGIM_SESSION_ABSOLUTE_TIMEOUT:
+    raise ImproperlyConfigured(
+        "Se requiere 0 < SGIM_SESSION_IDLE_TIMEOUT <= SGIM_SESSION_ABSOLUTE_TIMEOUT."
+    )
+
+# SESSION_COOKIE_AGE NO es el límite absoluto: solo acota cuánto se conservan la
+# cookie y el registro de sesión. Se iguala al límite absoluto como tope de almacenamiento.
+SESSION_COOKIE_AGE = SGIM_SESSION_ABSOLUTE_TIMEOUT
+# La sesión solo se guarda cuando cambia (p. ej. al registrar actividad válida);
+# las peticiones pasivas no la modifican.
+SESSION_SAVE_EVERY_REQUEST = False
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+
+# El frontend lee la cookie csrftoken y la envía en la cabecera X-CSRFToken,
+# por eso no puede ser HttpOnly. La cookie de sesión sí lo es.
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_SAMESITE = "Lax"
 
 
 # --- Cabeceras de seguridad comunes ----------------------------------------
@@ -169,4 +211,3 @@ REST_FRAMEWORK = {
 SECURE_CONTENT_TYPE_NOSNIFF = True
 SECURE_REFERRER_POLICY = "same-origin"
 X_FRAME_OPTIONS = "DENY"
-SESSION_COOKIE_HTTPONLY = True

@@ -23,7 +23,7 @@ cd backend
 py -3.14 -m venv .venv
 .venv/Scripts/activate          # Windows (Git Bash: source .venv/Scripts/activate)
 pip install -r requirements-dev.txt
-cp .env.example .env            # completa los valores; nunca lo subas al repositorio
+cp .env.example .env            # completa los valores (DB_NAME=sgim_app); nunca lo subas al repositorio
 python manage.py migrate
 python manage.py runserver
 ```
@@ -47,6 +47,8 @@ npm run dev
 - Backend: `pytest` y `ruff check .` (desde `backend/` con el entorno activado).
 - Frontend: `npm test`, `npm run lint` y `npm run build` (desde `frontend/`).
 - La API de salud responde en `GET /api/v1/health/`.
+- Autenticación por sesión: `/api/v1/auth/csrf/`, `login/`, `logout/`, `me/` y `session/` ([ADR 0002](docs/adr/0002-autenticacion-y-roles.md)).
+- Política de sesión (8 h absolutas y 30 min de inactividad): [docs/sesiones.md](docs/sesiones.md).
 
 Guía completa para PowerShell: [docs/pruebas.md](docs/pruebas.md).
 
