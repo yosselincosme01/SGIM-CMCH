@@ -1,0 +1,47 @@
+# Configuración de herramientas del backend (las dependencias están en requirements*.txt).
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["test_*.py", "*_tests.py"]
+testpaths = ["apps", "config"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "-ra",
+]
+
+[tool.coverage.run]
+source = ["apps", "config"]
+omit = ["*/migrations/*", "*/tests/*", "config/asgi.py", "config/wsgi.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+extend-exclude = ["migrations"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes
+    "I",        # isort
+    "B",        # flake8-bugbear
+    "UP",       # pyupgrade
+    "DJ",       # flake8-django
+    "S",        # flake8-bandit (seguridad)
+    "SIM",      # flake8-simplify
+    "C4",       # flake8-comprehensions
+]
+
+[tool.ruff.lint.per-file-ignores]
+# assert es la forma idiomática en pytest
+"**/tests/**" = ["S101"]
+"**/test_*.py" = ["S101"]
+# Clave ficticia exclusiva de pruebas
+"config/settings/test.py" = ["S105"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["apps", "config"]
