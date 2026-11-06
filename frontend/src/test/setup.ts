@@ -3,6 +3,7 @@ import { cleanup } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll } from 'vitest'
 
 import { backend } from './fakeBackend'
+import { incidentsBackend } from './fakeIncidents'
 import { server } from './server'
 
 function clearCookies() {
@@ -19,6 +20,7 @@ afterEach(() => {
   cleanup()
   server.resetHandlers()
   backend.reset()
+  incidentsBackend.reset()
   clearCookies()
   localStorage.clear()
   sessionStorage.clear()
