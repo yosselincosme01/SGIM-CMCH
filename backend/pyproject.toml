@@ -5,6 +5,9 @@ DJANGO_SETTINGS_MODULE = "config.settings.test"
 python_files = ["test_*.py", "*_tests.py"]
 testpaths = ["apps", "config"]
 addopts = [
+    # Fija la configuración de pruebas: una variable DJANGO_SETTINGS_MODULE de la
+    # terminal (por ejemplo, config.settings.dev) no puede sustituirla.
+    "--ds=config.settings.test",
     "--strict-markers",
     "--strict-config",
     "-ra",

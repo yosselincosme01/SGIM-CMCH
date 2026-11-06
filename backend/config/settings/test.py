@@ -2,7 +2,9 @@
 Configuración para pruebas automatizadas.
 
 - Nunca lee backend/.env: las pruebas son reproducibles en cualquier equipo y en CI.
-- Usa una base de datos propia (por defecto ``sgim_test``), nunca ``sgim_dev``.
+- Solo acepta bases cuyo nombre sea ``sgim_test`` o empiece por ``sgim_test_``
+  (ver ``config.test_safety``). Django NO añade el prefijo ``test_`` porque
+  ``TEST.NAME`` se define explícitamente: la base que se crea y elimina es esa.
 - Los valores por defecto son ficticios y exclusivos de pruebas.
 """
 
@@ -16,20 +18,25 @@ os.environ.setdefault("DJANGO_SECRET_KEY", "insecure-test-only-key-not-for-any-r
 os.environ.setdefault("DB_NAME", "sgim_test")
 os.environ.setdefault("DB_USER", "sgim_test")
 
+from config.test_safety import (  # noqa: E402
+    UnsafeTestConfiguration,
+    validate_test_db_name,
+    validate_test_db_user,
+)
+
 from .base import *  # noqa: E402, F403
-from .base import DATABASES, env  # noqa: E402
+from .base import DATABASES, REST_FRAMEWORK, env  # noqa: E402
 
 DEBUG = False
 ALLOWED_HOSTS = ["testserver", "localhost"]
 
 TEST_DB_NAME = env("TEST_DB_NAME", "sgim_test")
-PROTECTED_DB_NAMES = {"sgim_dev", "sgim", "postgres"}
 
-if TEST_DB_NAME in PROTECTED_DB_NAMES:
-    raise ImproperlyConfigured(
-        f"Las pruebas no pueden usar la base de datos '{TEST_DB_NAME}'. "
-        "Define TEST_DB_NAME con una base exclusiva para pruebas."
-    )
+try:
+    validate_test_db_name(TEST_DB_NAME)
+    validate_test_db_user(DATABASES["default"]["USER"])
+except UnsafeTestConfiguration as exc:
+    raise ImproperlyConfigured(str(exc)) from exc
 
 # Copia nueva: no se modifica el diccionario compartido de base.py.
 DATABASES = {
@@ -41,3 +48,6 @@ DATABASES = {
 PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
 EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+
+# Los clientes de prueba de DRF envían JSON, igual que el frontend.
+REST_FRAMEWORK = {**REST_FRAMEWORK, "TEST_REQUEST_DEFAULT_FORMAT": "json"}
