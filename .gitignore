@@ -218,3 +218,14 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+
+# Frontend - React / Vite
+node_modules/
+frontend/dist/
+frontend/.env.local
+frontend/.env.*.local
+
+# Backend - Django
+backend/staticfiles/
+backend/media/

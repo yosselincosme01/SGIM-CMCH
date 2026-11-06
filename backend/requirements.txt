@@ -1,0 +1,5 @@
+# Dependencias de ejecución (versiones fijadas)
+Django==6.0.10
+djangorestframework==3.18.3
+psycopg[binary]==3.3.8
+python-dotenv==1.2.4
