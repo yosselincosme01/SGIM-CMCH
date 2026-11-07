@@ -28,7 +28,8 @@ def _incident(user, care_unit, area, text="Incidencia ficticia de prueba"):
         care_unit=care_unit,
         support_area=area,
         description=text,
-        equipment_qr_status="not_equipment",
+        equipment_qr_status="qr_readable",
+        qr_code="QR-FICTICIO-PRUEBA",
     )
 
 
@@ -90,7 +91,8 @@ def test_create_incident_without_optional_fields(client_for, solicitante, care_u
         "care_unit": care_unit.code,
         "support_area": area_ti.code,
         "description": "Descripción mínima válida.",
-        "equipment_qr_status": "not_equipment",
+        "equipment_qr_status": "qr_readable",
+        "qr_code": "QR-FICTICIO-MINIMO",
     }
 
     response = client_for(solicitante).post(LIST_URL, payload, format="multipart")

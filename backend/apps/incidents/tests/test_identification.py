@@ -10,9 +10,12 @@ from django.db.migrations.executor import MigrationExecutor
 from rest_framework import status
 
 from apps.accounts.roles import Role
-from apps.incidents.identification import QR_CODE_MAX
+from apps.incidents.attachments import prepare_evidence_image
+from apps.incidents.identification import PHOTO_REQUIRED, QR_CODE_MAX, QR_REQUIRED
 from apps.incidents.models import Incident
 from apps.incidents.services import create_incident
+
+from .conftest import image_bytes, upload
 
 pytestmark = pytest.mark.django_db
 
@@ -25,6 +28,10 @@ def detail(code):
 
 def _post(client, payload):
     return client.post(LIST_URL, payload, format="multipart")
+
+
+def _photo():
+    return upload("evidencia.png", image_bytes("PNG"))
 
 
 @pytest.fixture
@@ -49,13 +56,15 @@ def base(care_unit, area_ti):
     ],
 )
 def test_each_option_registers_an_incident(client_for, solicitante, base, option, extra, label):
+    if option != "qr_readable":
+        extra = {**extra, "photo": _photo()}  # sin QR legible, la foto es obligatoria
     response = _post(client_for(solicitante), {**base, "equipment_qr_status": option, **extra})
 
     assert response.status_code == status.HTTP_201_CREATED, response.json()
     body = response.json()
     assert body["equipment_qr_status"] == option
     assert body["equipment_qr_status_label"] == label
-    assert body["qr_code"] == extra.get("qr_code", "")
+    assert body["qr_code"] == (extra.get("qr_code", "") if option == "qr_readable" else "")
     incident = Incident.objects.get(code=body["code"])
     expected_method = "manual" if option == "qr_readable" else ""
     assert incident.qr_capture_method == expected_method
@@ -119,7 +128,7 @@ def test_readable_qr_requires_its_content(client_for, solicitante, base, code):
     response = _post(client_for(solicitante), payload)
 
     assert response.status_code == 400
-    assert response.json()["qr_code"] == ["Escribe el contenido del código QR."]
+    assert response.json()["qr_code"] == [QR_REQUIRED]
 
 
 @pytest.mark.parametrize(
@@ -156,9 +165,7 @@ def test_qr_content_is_rejected_for_options_without_readable_qr(
     assert not Incident.objects.exists()
 
 
-@pytest.mark.parametrize(
-    "field", ["asset_reference", "qr_capture_method", "equipment_qr_status_label"]
-)
+@pytest.mark.parametrize("field", ["asset_reference", "equipment_qr_status_label", "priority"])
 def test_unauthorized_fields_are_rejected(client_for, solicitante, base, field):
     payload = {**base, "equipment_qr_status": "qr_readable", "qr_code": "QR-1", field: "scan"}
 
@@ -170,12 +177,13 @@ def test_unauthorized_fields_are_rejected(client_for, solicitante, base, field):
 
 
 def test_responses_do_not_expose_the_legacy_field(client_for, solicitante, base):
-    body = _post(client_for(solicitante), {**base, "equipment_qr_status": "no_qr"}).json()
+    body = _post(
+        client_for(solicitante), {**base, "equipment_qr_status": "no_qr", "photo": _photo()}
+    ).json()
     detail_body = client_for(solicitante).get(detail(body["code"])).json()
 
     for payload in (body, detail_body):
         assert "asset_reference" not in payload
-        assert "qr_capture_method" not in payload
 
 
 # --- Servicio: las reglas no dependen de la API --------------------------------
@@ -209,6 +217,8 @@ def test_service_rejects_incoherent_identification(solicitante, care_unit, area_
 
 
 def _incident(solicitante, care_unit, area_ti, **identification):
+    if identification.get("equipment_qr_status") != "qr_readable":
+        identification["evidence"] = prepare_evidence_image(_photo())
     return create_incident(
         user=solicitante,
         care_unit=care_unit,
@@ -333,3 +343,100 @@ def test_migration_keeps_existing_incidents_and_legacy_values():
     executor.migrate([("incidents", "0004_provisional_priority_levels")])  # reversible
     executor = MigrationExecutor(connection)
     executor.migrate(executor.loader.graph.leaf_nodes())
+
+
+# --- Fotografía obligatoria sin QR legible --------------------------------------
+
+
+@pytest.mark.parametrize("option", ["qr_unreadable", "no_qr", "not_equipment"])
+def test_photo_is_required_without_a_readable_qr(client_for, solicitante, base, option):
+    """La API rechaza la solicitud directa sin fotografía (no depende del frontend)."""
+    response = _post(client_for(solicitante), {**base, "equipment_qr_status": option})
+
+    assert response.status_code == 400
+    assert response.json()["photo"] == [PHOTO_REQUIRED]
+    assert not Incident.objects.exists()
+
+
+def test_photo_stays_optional_with_a_readable_qr(client_for, solicitante, base):
+    response = _post(
+        client_for(solicitante), {**base, "equipment_qr_status": "qr_readable", "qr_code": "QR-9"}
+    )
+
+    assert response.status_code == 201
+    assert response.json()["attachments"] == []
+
+
+def test_required_photo_keeps_the_existing_image_validation(client_for, solicitante, base):
+    """La foto obligatoria pasa por el mismo control: tipo real, tamaño y sin metadatos."""
+    fake = upload("foto.png", b"esto no es una imagen", "image/png")
+
+    response = _post(
+        client_for(solicitante), {**base, "equipment_qr_status": "no_qr", "photo": fake}
+    )
+
+    assert response.status_code == 400
+    assert "imagen válida" in response.json()["photo"][0]
+
+
+@pytest.mark.parametrize("option", ["qr_unreadable", "no_qr", "not_equipment"])
+def test_service_requires_photo_without_a_readable_qr(solicitante, care_unit, area_ti, option):
+    with pytest.raises(ValidationError) as error:
+        create_incident(
+            user=solicitante,
+            care_unit=care_unit,
+            support_area=area_ti,
+            description="Descripción ficticia suficientemente larga.",
+            equipment_qr_status=option,
+        )
+    assert "photo" in error.value.message_dict
+    assert not Incident.objects.exists()
+
+
+# --- Forma de captura -----------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("sent", "stored"), [(None, "manual"), ("manual", "manual"), ("scan", "scan")]
+)
+def test_capture_method_is_recorded_for_a_readable_qr(client_for, solicitante, base, sent, stored):
+    payload = {**base, "equipment_qr_status": "qr_readable", "qr_code": "QR-CAM-1"}
+    if sent is not None:
+        payload["qr_capture_method"] = sent
+
+    response = _post(client_for(solicitante), payload)
+
+    assert response.status_code == 201
+    assert Incident.objects.get().qr_capture_method == stored
+
+
+@pytest.mark.parametrize("method", ["camara", "SCAN", "auto", "x" * 11])
+def test_unknown_capture_methods_are_rejected(client_for, solicitante, base, method):
+    payload = {
+        **base,
+        "equipment_qr_status": "qr_readable",
+        "qr_code": "QR-1",
+        "qr_capture_method": method,
+    }
+
+    response = _post(client_for(solicitante), payload)
+
+    assert response.status_code == 400
+    assert "qr_capture_method" in response.json()
+    assert not Incident.objects.exists()
+
+
+@pytest.mark.parametrize("option", ["qr_unreadable", "no_qr", "not_equipment"])
+def test_capture_method_is_rejected_without_a_readable_qr(client_for, solicitante, base, option):
+    payload = {
+        **base,
+        "equipment_qr_status": option,
+        "qr_capture_method": "scan",
+        "photo": _photo(),
+    }
+
+    response = _post(client_for(solicitante), payload)
+
+    assert response.status_code == 400
+    assert "qr_capture_method" in response.json()
+    assert not Incident.objects.exists()

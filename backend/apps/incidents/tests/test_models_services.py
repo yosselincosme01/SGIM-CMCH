@@ -25,7 +25,7 @@ def _create(user, care_unit, area, **extra):
         care_unit=care_unit,
         support_area=area,
         description="Descripción ficticia de prueba suficientemente larga.",
-        **{"equipment_qr_status": "not_equipment", **extra},
+        **{"equipment_qr_status": "qr_readable", "qr_code": "QR-FICTICIO-PRUEBA", **extra},
     )
 
 

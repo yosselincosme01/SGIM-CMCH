@@ -57,7 +57,8 @@ def _incident(user, care_unit, area, text="Incidencia ficticia de planificación
         care_unit=care_unit,
         support_area=area,
         description=text,
-        equipment_qr_status="not_equipment",
+        equipment_qr_status="qr_readable",
+        qr_code="QR-FICTICIO-PRUEBA",
     )
 
 

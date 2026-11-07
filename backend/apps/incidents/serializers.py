@@ -9,7 +9,13 @@ from apps.catalogs.models import CareUnit
 
 from . import planning_services, selectors
 from .attachments import prepare_evidence_image
-from .identification import QR_CODE_MAX, QR_TOO_LONG, clean_equipment_identification
+from .identification import (
+    PHOTO_REQUIRED,
+    QR_CODE_MAX,
+    QR_TOO_LONG,
+    clean_equipment_identification,
+    requires_photo,
+)
 from .models import (
     Incident,
     IncidentAssignment,
@@ -113,6 +119,10 @@ class IncidentCreateSerializer(serializers.Serializer):
         max_length=QR_CODE_MAX + 50,  # el límite exacto se aplica tras quitar espacios
         error_messages={"max_length": QR_TOO_LONG},
     )
+    # Dato declarado por el cliente ("scan" si usó la cámara); ver identification.py.
+    qr_capture_method = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=10
+    )
     photo = serializers.FileField(required=False, allow_null=True, write_only=True)
 
     def to_internal_value(self, data):
@@ -125,13 +135,18 @@ class IncidentCreateSerializer(serializers.Serializer):
 
     def validate(self, attrs):
         try:
-            status, qr_code, _ = clean_equipment_identification(
-                attrs.get("equipment_qr_status"), attrs.get("qr_code")
+            status, qr_code, method = clean_equipment_identification(
+                attrs.get("equipment_qr_status"),
+                attrs.get("qr_code"),
+                attrs.get("qr_capture_method"),
             )
         except DjangoValidationError as exc:
             raise serializers.ValidationError(exc.message_dict) from exc
+        if requires_photo(status) and not attrs.get("photo"):
+            raise serializers.ValidationError({"photo": [PHOTO_REQUIRED]})
         attrs["equipment_qr_status"] = status
         attrs["qr_code"] = qr_code
+        attrs["qr_capture_method"] = method
         return attrs
 
     def validate_photo(self, photo):

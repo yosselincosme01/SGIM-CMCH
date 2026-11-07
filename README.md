@@ -57,6 +57,7 @@ npm run dev        # http://localhost:5173 (requiere Django en http://127.0.0.1:
 - Incidencias (registro y consulta): [ADR 0003](docs/adr/0003-incidencias.md).
 - Planificación y asignación (rol Planificador): [ADR 0004](docs/adr/0004-planificacion.md).
 - Identificación del equipo mediante QR: [ADR 0005](docs/adr/0005-identificacion-qr.md).
+- Probar el formulario y la cámara desde un celular: [docs/pruebas-movil.md](docs/pruebas-movil.md).
 - Configurar pertenencias de demostración: [docs/planificacion-pertenencias.md](docs/planificacion-pertenencias.md).
 
 Guía completa para PowerShell: [docs/pruebas.md](docs/pruebas.md).

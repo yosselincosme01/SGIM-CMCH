@@ -1,10 +1,11 @@
 """Casos de uso de incidencias. Toda escritura pasa por aquí (no por los serializers)."""
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 
 from .attachments import EvidenceImage
-from .identification import clean_equipment_identification
+from .identification import PHOTO_REQUIRED, clean_equipment_identification, requires_photo
 from .models import Incident, IncidentAttachment, IncidentEvent
 
 
@@ -28,6 +29,7 @@ def create_incident(
     description: str,
     equipment_qr_status: str,
     qr_code: str = "",
+    qr_capture_method: str = "",
     prior_actions: str = "",
     evidence: EvidenceImage | None = None,
 ) -> Incident:
@@ -39,12 +41,14 @@ def create_incident(
     metadatos. Nunca se guarda el archivo tal como lo envió el cliente.
 
     La identificación del equipo se valida aquí también (no solo en la API): solo un
-    QR legible lleva contenido, y la forma de captura la fija el servidor. El campo
-    legado ``asset_reference`` no se usa en registros nuevos.
+    QR legible lleva contenido y forma de captura, y sin un QR legible la fotografía
+    es obligatoria. El campo legado ``asset_reference`` no se usa en registros nuevos.
     """
     qr_status, qr_code, capture_method = clean_equipment_identification(
-        equipment_qr_status, qr_code
+        equipment_qr_status, qr_code, qr_capture_method
     )
+    if requires_photo(qr_status) and evidence is None:
+        raise ValidationError({"photo": PHOTO_REQUIRED})
     incident = Incident.objects.create(
         care_unit=care_unit,
         support_area=support_area,
