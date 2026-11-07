@@ -106,6 +106,28 @@ class PriorityLevel(models.Model):
         return self.name
 
 
+class EquipmentQrStatus(models.TextChoices):
+    """Respuesta a "¿El equipo tiene código QR?" (ADR 0005)."""
+
+    QR_READABLE = "qr_readable", "Tiene QR y puedo leerlo"
+    QR_UNREADABLE = "qr_unreadable", "Tiene QR, pero no puedo leerlo"
+    NO_QR = "no_qr", "El equipo no tiene QR"
+    NOT_EQUIPMENT = "not_equipment", "No corresponde a un equipo"
+    # Solo para incidencias anteriores a la identificación por QR. La API no lo acepta.
+    UNSPECIFIED = "unspecified", "Sin dato de identificación (incidencia anterior)"
+
+    @classmethod
+    def public_values(cls) -> list[str]:
+        """Opciones que puede elegir quien registra una incidencia."""
+        return [value for value in cls.values if value != cls.UNSPECIFIED]
+
+
+class QrCaptureMethod(models.TextChoices):
+    MANUAL = "manual", "Escrito por el usuario"
+    # Reservado para la futura lectura con cámara. La API no lo acepta todavía.
+    SCAN = "scan", "Leído con la cámara"
+
+
 class Incident(models.Model):
     """Incidencia registrada por un usuario autenticado."""
 
@@ -114,6 +136,10 @@ class Incident(models.Model):
         # definitivos están pendientes de validación (docs/adr/0004-planificacion.md).
         REGISTRADA = "registrada", "Registrada"
         ASIGNADA = "asignada", "Asignada"
+
+    # Alias para usar Incident.EquipmentQrStatus / Incident.QrCaptureMethod.
+    EquipmentQrStatus = EquipmentQrStatus
+    QrCaptureMethod = QrCaptureMethod
 
     # null=True es necesario: el código se asigna tras el INSERT (deriva de la clave
     # primaria) en la misma transacción, y UNIQUE admite varios NULL transitorios.
@@ -139,10 +165,34 @@ class Incident(models.Model):
     description = models.TextField("descripción del problema")
     prior_actions = models.TextField("acciones previas", blank=True)
     asset_reference = models.CharField(
-        "referencia del equipo o activo",
+        "referencia del equipo (legado)",
         max_length=100,
         blank=True,
-        help_text="Texto libre (código patrimonial, serie o nombre); sin integración aún.",
+        editable=False,
+        help_text=(
+            "Campo legado: no se usa en registros nuevos ni en la API. Se eliminará al "
+            "integrar el inventario institucional (ADR 0005)."
+        ),
+    )
+    equipment_qr_status = models.CharField(
+        "identificación del equipo",
+        max_length=20,
+        choices=EquipmentQrStatus.choices,
+        editable=False,
+    )
+    qr_code = models.CharField(
+        "contenido del QR",
+        max_length=255,
+        blank=True,
+        editable=False,
+        help_text="Texto leído, sin interpretar. Pendiente de validar contra el inventario.",
+    )
+    qr_capture_method = models.CharField(
+        "forma de captura del QR",
+        max_length=10,
+        choices=QrCaptureMethod.choices,
+        blank=True,
+        editable=False,
     )
     status = models.CharField(
         "estado", max_length=30, choices=Status.choices, default=Status.REGISTRADA, editable=False
@@ -175,6 +225,29 @@ class Incident(models.Model):
             models.Index(fields=("created_by", "-created_at"), name="incident_creator_idx"),
             models.Index(fields=("support_area", "-created_at"), name="incident_area_idx"),
             models.Index(fields=("support_area", "status"), name="incident_area_status_idx"),
+            models.Index(
+                fields=("qr_code",), name="incident_qr_code_idx", condition=~Q(qr_code="")
+            ),
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(equipment_qr_status__in=EquipmentQrStatus.values),
+                name="incident_qr_status_valid",
+            ),
+            # Solo un QR legible lleva contenido (sin espacios en los extremos) y forma
+            # de captura; las demás opciones no guardan código.
+            models.CheckConstraint(
+                condition=(
+                    Q(
+                        equipment_qr_status="qr_readable",
+                        qr_capture_method__in=QrCaptureMethod.values,
+                    )
+                    & ~Q(qr_code="")
+                    & ~Q(qr_code__regex=r"^\s|\s$")
+                )
+                | (~Q(equipment_qr_status="qr_readable") & Q(qr_code="", qr_capture_method="")),
+                name="incident_qr_code_matches_status",
+            ),
         ]
 
     def __str__(self) -> str:

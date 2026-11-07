@@ -113,7 +113,7 @@ class IncidentAdmin(admin.ModelAdmin):
         "created_at",
     )
     list_filter = ("status", "priority", "support_area", "care_unit")
-    search_fields = ("code", "description", "asset_reference")
+    search_fields = ("code", "description", "qr_code", "asset_reference")
     readonly_fields = (
         "code",
         "status",
@@ -122,6 +122,9 @@ class IncidentAdmin(admin.ModelAdmin):
         "support_area",
         "description",
         "prior_actions",
+        "equipment_qr_status",
+        "qr_code",
+        "qr_capture_method",
         "asset_reference",
         "created_by",
         "created_at",

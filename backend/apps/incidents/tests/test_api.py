@@ -23,7 +23,13 @@ def detail_url(code: str) -> str:
 
 
 def _incident(user, care_unit, area, text="Incidencia ficticia de prueba"):
-    return create_incident(user=user, care_unit=care_unit, support_area=area, description=text)
+    return create_incident(
+        user=user,
+        care_unit=care_unit,
+        support_area=area,
+        description=text,
+        equipment_qr_status="not_equipment",
+    )
 
 
 # --- Rutas y opciones --------------------------------------------------------
@@ -79,10 +85,12 @@ def test_create_incident_with_photo(client_for, solicitante, valid_payload):
 
 
 def test_create_incident_without_optional_fields(client_for, solicitante, care_unit, area_ti):
+    """Sin acciones previas ni foto; la identificación del equipo sí es obligatoria."""
     payload = {
         "care_unit": care_unit.code,
         "support_area": area_ti.code,
         "description": "Descripción mínima válida.",
+        "equipment_qr_status": "not_equipment",
     }
 
     response = client_for(solicitante).post(LIST_URL, payload, format="multipart")
@@ -123,7 +131,7 @@ def test_system_fields_cannot_be_set_from_the_form(client_for, solicitante, vali
         ({"description": "corta"}, "description", "al menos 10"),
         ({"description": "x" * 2001}, "description", "2000"),
         ({"prior_actions": "x" * 1001}, "prior_actions", "1000"),
-        ({"asset_reference": "x" * 101}, "asset_reference", "100"),
+        ({"equipment_qr_status": ""}, "equipment_qr_status", "código QR"),
     ],
 )
 def test_field_validation(client_for, solicitante, valid_payload, changes, field, message):

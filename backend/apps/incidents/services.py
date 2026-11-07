@@ -4,6 +4,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from .attachments import EvidenceImage
+from .identification import clean_equipment_identification
 from .models import Incident, IncidentAttachment, IncidentEvent
 
 
@@ -25,8 +26,9 @@ def create_incident(
     care_unit,
     support_area,
     description: str,
+    equipment_qr_status: str,
+    qr_code: str = "",
     prior_actions: str = "",
-    asset_reference: str = "",
     evidence: EvidenceImage | None = None,
 ) -> Incident:
     """
@@ -35,13 +37,22 @@ def create_incident(
 
     La evidencia debe venir de ``attachments.prepare_evidence_image``: validada y sin
     metadatos. Nunca se guarda el archivo tal como lo envió el cliente.
+
+    La identificación del equipo se valida aquí también (no solo en la API): solo un
+    QR legible lleva contenido, y la forma de captura la fija el servidor. El campo
+    legado ``asset_reference`` no se usa en registros nuevos.
     """
+    qr_status, qr_code, capture_method = clean_equipment_identification(
+        equipment_qr_status, qr_code
+    )
     incident = Incident.objects.create(
         care_unit=care_unit,
         support_area=support_area,
         description=description,
         prior_actions=prior_actions,
-        asset_reference=asset_reference,
+        equipment_qr_status=qr_status,
+        qr_code=qr_code,
+        qr_capture_method=capture_method,
         created_by=user,
     )
     incident.code = format_incident_code(timezone.localtime(incident.created_at).year, incident.pk)

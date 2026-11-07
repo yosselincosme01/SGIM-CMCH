@@ -152,5 +152,6 @@ def valid_payload(care_unit, area_ti):
         "support_area": area_ti.code,
         "description": "La impresora del módulo de admisión no imprime etiquetas.",
         "prior_actions": "Se reinició la impresora.",
-        "asset_reference": "DEMO-IMP-001",
+        "equipment_qr_status": "qr_readable",
+        "qr_code": "DEMO-QR-IMP-001",
     }

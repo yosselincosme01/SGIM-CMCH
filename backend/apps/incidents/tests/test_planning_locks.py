@@ -80,6 +80,7 @@ def planning_setup(make_user, solicitante, care_unit, area_ti):
         care_unit=care_unit,
         support_area=area_ti,
         description="Incidencia ficticia para probar bloqueos",
+        equipment_qr_status="no_qr",
     )
     return planner, tech, incident
 
