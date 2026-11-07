@@ -9,7 +9,7 @@ describe('vistas por rol', () => {
   it('usa denominaciones funcionales comprensibles', () => {
     expect(ROLE_VIEWS.map((view) => [view.role, view.label])).toEqual([
       ['solicitante', 'Solicitante'],
-      ['planificador', 'Responsable de Área'],
+      ['planificador', 'Planificador'],
       ['personal_atencion', 'Personal de Atención'],
       ['administrador', 'Administrador'],
     ])
@@ -26,7 +26,7 @@ describe('vistas por rol', () => {
     const list = await screen.findByRole('list', { name: 'Vistas disponibles' })
     const links = within(list).getAllByRole('link')
     expect(links.map((link) => link.textContent)).toEqual([
-      expect.stringContaining('Responsable de Área'),
+      expect.stringContaining('Planificador'),
       expect.stringContaining('Personal de Atención'),
     ])
     expect(within(list).queryByText('Solicitante')).not.toBeInTheDocument()
@@ -40,12 +40,12 @@ describe('vistas por rol', () => {
     const switcher = await screen.findByRole('combobox', { name: 'Vista' })
     expect(within(switcher).getAllByRole('option').map((option) => option.textContent)).toEqual([
       'Inicio',
-      'Responsable de Área',
+      'Planificador',
       'Personal de Atención',
     ])
 
-    await user.selectOptions(switcher, 'Responsable de Área')
-    expect(await screen.findByRole('heading', { name: 'Responsable de Área' })).toBeInTheDocument()
+    await user.selectOptions(switcher, 'Planificador')
+    expect(await screen.findByRole('heading', { name: 'Planificador' })).toBeInTheDocument()
 
     await user.selectOptions(screen.getByRole('combobox', { name: 'Vista' }), 'Personal de Atención')
     expect(await screen.findByRole('heading', { name: 'Personal de Atención' })).toBeInTheDocument()

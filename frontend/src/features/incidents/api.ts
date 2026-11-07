@@ -37,10 +37,37 @@ export interface IncidentAttachment {
   url: string
 }
 
+export interface Person {
+  username: string
+  full_name: string
+}
+
+export interface PriorityLevel {
+  code: string
+  name: string
+  order: number
+  description: string
+  /** Niveles pendientes de validación institucional. */
+  is_provisional: boolean
+}
+
 export interface IncidentEvent {
   event_type: string
   label: string
   actor: string
+  created_at: string
+  /** Solo para el personal del área: valores anteriores y nuevos del cambio. */
+  from_status?: string
+  to_status?: string
+  details?: Record<string, unknown>
+}
+
+export interface CurrentAssignment {
+  id: number
+  technician: Person
+  assigned_by: Person
+  scheduled_at: string
+  notes: string
   created_at: string
 }
 
@@ -48,9 +75,15 @@ export interface IncidentDetail extends Omit<IncidentSummary, 'has_attachments'>
   description: string
   prior_actions: string
   asset_reference: string
-  created_by: { username: string; full_name: string }
+  created_by: Person
   attachments: IncidentAttachment[]
   events: IncidentEvent[]
+  /** Vista del solicitante: fecha estimada de atención, si ya se programó. */
+  scheduled_at?: string | null
+  /** Vista del personal del área. */
+  priority?: PriorityLevel | null
+  assignment?: CurrentAssignment | null
+  permissions?: { can_plan: boolean }
 }
 
 export interface Page<T> {

@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll } from 'vitest'
 
 import { backend } from './fakeBackend'
 import { incidentsBackend } from './fakeIncidents'
+import { planningBackend } from './fakePlanning'
 import { server } from './server'
 
 function clearCookies() {
@@ -21,6 +22,7 @@ afterEach(() => {
   server.resetHandlers()
   backend.reset()
   incidentsBackend.reset()
+  planningBackend.reset()
   clearCookies()
   localStorage.clear()
   sessionStorage.clear()

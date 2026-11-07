@@ -57,11 +57,8 @@ export const SERVER_FIELD_MAP: Record<string, keyof IncidentFormErrors> = {
   photo: 'photo',
 }
 
-export function formatDateTime(value: string): string {
-  return new Intl.DateTimeFormat('es-PE', { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(value),
-  )
-}
+/** Fechas siempre en hora de Lima, sin depender del navegador. */
+export { formatDateTime } from '../../shared/dates'
 
 export function formatBytes(size: number): string {
   if (size < 1024) return `${size} B`

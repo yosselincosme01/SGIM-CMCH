@@ -1,0 +1,296 @@
+/*
+ * Estilos del módulo de planificación. Usa los tokens de index.css; no define
+ * colores propios. La prioridad y el estado siempre llevan texto, no solo color.
+ */
+
+/* --- Estados y prioridades ------------------------------------------------------ */
+
+.badge--asignada {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.priority {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-3);
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 0.85rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.priority::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.priority--critica {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  border-color: var(--color-danger);
+}
+
+.priority--alta {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+.priority--media {
+  background: var(--color-info-soft);
+  color: var(--color-info);
+}
+
+.priority--baja {
+  background: var(--color-surface-muted);
+  color: var(--color-text);
+}
+
+.priority--none {
+  background: transparent;
+  color: var(--color-text-muted);
+  border: 1px dashed var(--color-border);
+}
+
+.priority--none::before {
+  display: none;
+}
+
+.provisional-note {
+  margin: 0;
+}
+
+/* --- Bandeja ------------------------------------------------------------------- */
+
+.summary-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+  gap: var(--space-3);
+}
+
+.summary-chip {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  padding: var(--space-4);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.summary-chip:hover {
+  border-color: var(--color-primary);
+}
+
+.summary-chip:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.summary-chip[aria-pressed='true'] {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.summary-chip__value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-chip__label {
+  font-weight: 600;
+}
+
+.filters {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.filters__toggle {
+  padding: var(--space-4);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.filters__toggle:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -3px;
+}
+
+.filters__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 0 var(--space-4) var(--space-4);
+}
+
+.filters__search-row {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.filters__search-row .field__input {
+  flex: 1;
+  min-width: 0;
+}
+
+.filters__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  gap: var(--space-4);
+}
+
+.planning-table__meta {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-weight: 400;
+}
+
+.planning-table__excerpt {
+  max-width: 22rem;
+  overflow-wrap: anywhere;
+}
+
+.planning-table__action {
+  white-space: nowrap;
+}
+
+/* --- Detalle y planificación --------------------------------------------------- */
+
+.planning-header__badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.planning-layout {
+  display: grid;
+  gap: var(--space-5);
+}
+
+/* En escritorio: detalle a la izquierda y panel fijo a la derecha. */
+@media (min-width: 64rem) {
+  .planning-layout {
+    grid-template-columns: minmax(0, 1fr) minmax(22rem, 26rem);
+    align-items: start;
+  }
+
+  .planning-layout__main {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .planning-layout__panel {
+    grid-column: 2;
+    grid-row: 1;
+    position: sticky;
+    top: var(--space-4);
+  }
+}
+
+.planning-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-top: 5px solid var(--color-primary);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.planning-panel__title {
+  font-size: 1.2rem;
+}
+
+.planning-panel__notice:focus {
+  outline: none;
+}
+
+.choice-grid--compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.choice-grid--compact .choice {
+  padding-top: var(--space-3);
+  padding-bottom: var(--space-3);
+}
+
+.current-assignment,
+.change-summary {
+  margin: 0;
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface-muted);
+  border-radius: var(--radius-small);
+}
+
+.current-assignment dt,
+.change-summary dt {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.current-assignment dd,
+.change-summary dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.schedule-note {
+  border-left: 5px solid var(--color-success);
+}
+
+.timeline__changes {
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 40rem) {
+  .planning-panel {
+    padding: var(--space-5) var(--space-4);
+  }
+
+  .choice-grid--compact {
+    grid-template-columns: 1fr;
+  }
+
+  .filters__search-row {
+    flex-direction: column;
+  }
+
+  .planning-table__excerpt {
+    max-width: none;
+  }
+
+  .planning-table__action {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+  }
+}

@@ -25,9 +25,9 @@ export const ROLE_VIEWS: readonly RoleView[] = [
   },
   {
     role: 'planificador',
-    label: 'Responsable de Área',
-    path: '/responsable-area',
-    summary: 'Gestión de prioridades, programación, asignaciones y supervisión.',
+    label: 'Planificador',
+    path: '/planificador',
+    summary: 'Priorización, programación y asignación de las incidencias de tus áreas.',
   },
   {
     role: 'personal_atencion',
