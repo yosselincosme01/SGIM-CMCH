@@ -332,7 +332,9 @@ def test_migration_keeps_existing_incidents_and_legacy_values():
 
     executor = MigrationExecutor(connection)
     executor.migrate([("incidents", "0005_incident_qr_identification")])
-    migrated = Incident.objects.get(pk=old.pk)
+    # Modelo histórico de la 0005: el actual ya incluye columnas de migraciones posteriores.
+    after = executor.loader.project_state([("incidents", "0005_incident_qr_identification")]).apps
+    migrated = after.get_model("incidents", "Incident").objects.get(pk=old.pk)
 
     assert migrated.equipment_qr_status == "unspecified"
     assert migrated.qr_code == ""

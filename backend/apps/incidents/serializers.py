@@ -7,7 +7,7 @@ from rest_framework import serializers
 
 from apps.catalogs.models import CareUnit
 
-from . import planning_services, selectors
+from . import attention_services, planning_services, selectors
 from .attachments import prepare_evidence_image
 from .identification import (
     PHOTO_REQUIRED,
@@ -21,6 +21,8 @@ from .models import (
     IncidentAssignment,
     IncidentAttachment,
     IncidentEvent,
+    IncidentIntervention,
+    IncidentVerification,
     PriorityLevel,
     SupportArea,
 )
@@ -254,6 +256,8 @@ class EventSerializer(serializers.ModelSerializer):
 REQUESTER_HIDDEN_EVENTS = {
     IncidentEvent.Type.PRIORITY_CHANGED,
     IncidentEvent.Type.TECHNICIAN_CHANGED,
+    IncidentEvent.Type.INTERVENTION,
+    IncidentEvent.Type.VERIFIED,
 }
 
 
@@ -298,10 +302,15 @@ class _IncidentDetailBase(_IncidentBaseSerializer):
     equipment_qr_status_label = serializers.CharField(
         source="get_equipment_qr_status_display", read_only=True
     )
-    attachments = AttachmentSerializer(many=True, read_only=True)
+    attachments = serializers.SerializerMethodField()
 
     def get_created_by(self, incident) -> dict:
         return _person(incident.created_by)
+
+    def get_attachments(self, incident) -> list:
+        # Evidencia del registro. Las fotos técnicas van con su intervención.
+        registration = [a for a in incident.attachments.all() if a.intervention_id is None]
+        return AttachmentSerializer(registration, many=True).data
 
 
 DETAIL_FIELDS = (
@@ -322,6 +331,62 @@ DETAIL_FIELDS = (
 )
 
 
+class VerificationSerializer(serializers.ModelSerializer):
+    result_label = serializers.CharField(source="get_result_display", read_only=True)
+    verified_by = serializers.SerializerMethodField()
+
+    class Meta:
+        model = IncidentVerification
+        fields = ("id", "result", "result_label", "observations", "verified_by", "created_at")
+        read_only_fields = fields
+
+    def get_verified_by(self, verification) -> dict:
+        return _person(verification.verified_by)
+
+
+class InterventionSerializer(serializers.ModelSerializer):
+    """Intervención técnica con su evidencia y, si cerró el ticket, su verificación."""
+
+    result_label = serializers.CharField(source="get_result_display", read_only=True)
+    technician = serializers.SerializerMethodField()
+    photos = AttachmentSerializer(many=True, read_only=True)
+    is_closure = serializers.SerializerMethodField()
+    verification = serializers.SerializerMethodField()
+
+    class Meta:
+        model = IncidentIntervention
+        fields = (
+            "id",
+            "assignment",
+            "technician",
+            "result",
+            "result_label",
+            "diagnosis",
+            "actions_taken",
+            "used_parts",
+            "used_parts_detail",
+            "parts_required",
+            "parts_required_detail",
+            "unresolved_reason",
+            "observations",
+            "photos",
+            "is_closure",
+            "verification",
+            "created_at",
+        )
+        read_only_fields = fields
+
+    def get_technician(self, intervention) -> dict:
+        return _person(intervention.technician)
+
+    def get_is_closure(self, intervention) -> bool:
+        return intervention.result == IncidentIntervention.Result.SOLVED
+
+    def get_verification(self, intervention) -> dict | None:
+        verification = getattr(intervention, "verification", None)
+        return VerificationSerializer(verification).data if verification else None
+
+
 class IncidentDetailSerializer(_IncidentDetailBase):
     """
     Detalle para el personal del área (Planificador o técnico autorizado): incluye
@@ -333,12 +398,35 @@ class IncidentDetailSerializer(_IncidentDetailBase):
     events = EventSerializer(many=True, read_only=True)
     priority = PriorityLevelSerializer(read_only=True)
     assignment = serializers.SerializerMethodField()
+    interventions = InterventionSerializer(many=True, read_only=True)
+    closure = serializers.SerializerMethodField()
     permissions = serializers.SerializerMethodField()
 
     class Meta:
         model = Incident
-        fields = (*DETAIL_FIELDS, "priority", "assignment", "permissions")
+        fields = (
+            *DETAIL_FIELDS,
+            "priority",
+            "assignment",
+            "interventions",
+            "closure",
+            "permissions",
+        )
         read_only_fields = fields
+
+    def get_closure(self, incident) -> dict | None:
+        """Cierre técnico vigente y su verificación (``None`` si está abierta)."""
+        closing = incident.closing_intervention
+        if closing is None:
+            return None
+        verification = selectors.closing_verification(incident)
+        return {
+            "intervention": closing.pk,
+            "closed_by": _person(closing.technician),
+            "closed_at": LimaDateTimeField().to_representation(closing.created_at),
+            "pending_verification": verification is None,
+            "verification": VerificationSerializer(verification).data if verification else None,
+        }
 
     def get_assignment(self, incident) -> dict | None:
         current = selectors.current_assignment(incident)
@@ -346,10 +434,18 @@ class IncidentDetailSerializer(_IncidentDetailBase):
 
     def get_permissions(self, incident) -> dict:
         user = self.context["request"].user
-        can_plan = incident.status in selectors.PLANNABLE_STATUSES and selectors.can_plan_area(
-            user, incident.support_area
-        )
-        return {"can_plan": can_plan}
+        planner = selectors.can_plan_area(user, incident.support_area)
+        verification = selectors.closing_verification(incident) if planner else None
+        closed = incident.status == Incident.Status.CERRADA
+        return {
+            "can_plan": planner and incident.status in selectors.PLANNABLE_STATUSES,
+            "can_intervene": selectors.can_intervene(user, incident),
+            "can_verify": planner and closed and verification is None,
+            "can_reopen": planner
+            and closed
+            and verification is not None
+            and verification.result == IncidentVerification.Result.NOT_CONFORMING,
+        }
 
 
 class RequesterIncidentDetailSerializer(_IncidentDetailBase):
@@ -360,11 +456,16 @@ class RequesterIncidentDetailSerializer(_IncidentDetailBase):
 
     events = serializers.SerializerMethodField()
     scheduled_at = serializers.SerializerMethodField()
+    closed_at = serializers.SerializerMethodField()
 
     class Meta:
         model = Incident
-        fields = (*DETAIL_FIELDS, "scheduled_at")
+        fields = (*DETAIL_FIELDS, "scheduled_at", "closed_at")
         read_only_fields = fields
+
+    def get_closed_at(self, incident) -> str | None:
+        closing = incident.closing_intervention
+        return LimaDateTimeField().to_representation(closing.created_at) if closing else None
 
     def get_events(self, incident) -> list:
         events = [e for e in incident.events.all() if e.event_type not in REQUESTER_HIDDEN_EVENTS]
@@ -403,8 +504,22 @@ class PlanningListSerializer(_IncidentBaseSerializer):
             "priority",
             "assignment",
             "has_attachments",
+            "last_result",
+            "pending_verification",
         )
         read_only_fields = fields
+
+    last_result = serializers.SerializerMethodField()
+    pending_verification = serializers.SerializerMethodField()
+
+    def get_last_result(self, incident) -> dict | None:
+        value = getattr(incident, "last_result", None)
+        if not value:
+            return None
+        return {"code": value, "label": IncidentIntervention.Result(value).label}
+
+    def get_pending_verification(self, incident) -> bool:
+        return getattr(incident, "pending_verification_flag", False)
 
     def get_description_excerpt(self, incident) -> str:
         text = " ".join(incident.description.split())
@@ -504,3 +619,87 @@ class PlanningInputSerializer(_StrictInputSerializer):
     )
     reason = _reason_field()
     expected_assignment = serializers.IntegerField(required=False, allow_null=True, default=None)
+
+
+# --- Atención -------------------------------------------------------------------
+
+
+class AttentionListSerializer(PlanningListSerializer):
+    """Fila de la bandeja del Personal de Atención (mismos datos que la del Planificador)."""
+
+
+_BOOLEAN_CHOICE = {
+    "required": "Indica Sí o No.",
+    "null": "Indica Sí o No.",
+    "invalid_choice": "Indica Sí o No.",
+}
+
+
+class InterventionInputSerializer(_StrictInputSerializer):
+    """
+    Datos de una intervención (multipart). Los textos se validan en el servicio, que
+    también decide los campos condicionales. Las fotos pasan por el mismo control que
+    la evidencia del registro: tipo real, tamaño, dimensiones y sin metadatos.
+    """
+
+    assignment = serializers.IntegerField(
+        error_messages={
+            "required": "Falta la asignación vigente.",
+            "invalid": "Asignación inválida.",
+        }
+    )
+    diagnosis = serializers.CharField(required=False, allow_blank=True, default="", max_length=5000)
+    actions_taken = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=5000
+    )
+    result = serializers.CharField(required=False, allow_blank=True, default="", max_length=20)
+    # "true"/"false" explícitos: en multipart, un booleano ausente no debe valer "No".
+    used_parts = serializers.ChoiceField(choices=["true", "false"], error_messages=_BOOLEAN_CHOICE)
+    used_parts_detail = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=5000
+    )
+    parts_required = serializers.ChoiceField(
+        choices=["true", "false"], error_messages=_BOOLEAN_CHOICE
+    )
+    parts_required_detail = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=5000
+    )
+    unresolved_reason = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=5000
+    )
+    observations = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=5000
+    )
+    photos = serializers.ListField(
+        child=serializers.FileField(), required=False, default=list, allow_empty=True
+    )
+
+    def validate_used_parts(self, value) -> bool:
+        return value == "true"
+
+    def validate_parts_required(self, value) -> bool:
+        return value == "true"
+
+    def validate_photos(self, photos):
+        if len(photos) > attention_services.PHOTOS_MAX:
+            raise serializers.ValidationError(attention_services.TOO_MANY_PHOTOS)
+        prepared = []
+        for photo in photos:
+            try:
+                prepared.append(prepare_evidence_image(photo))
+            except DjangoValidationError as exc:
+                raise serializers.ValidationError(exc.messages) from exc
+        return prepared
+
+
+class VerificationInputSerializer(_StrictInputSerializer):
+    result = serializers.CharField(
+        max_length=20, error_messages={"required": "Selecciona Conforme o No conforme."}
+    )
+    observations = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=5000
+    )
+
+
+class ReopenInputSerializer(_StrictInputSerializer):
+    reason = serializers.CharField(required=False, allow_blank=True, default="", max_length=5000)
