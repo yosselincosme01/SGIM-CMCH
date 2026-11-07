@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import { Navigate, Route, Routes, useLocation } from 'react-router'
 
+import { AttentionDetailPage } from '../features/attention/AttentionDetailPage'
+import { AttentionInboxPage } from '../features/attention/AttentionInboxPage'
 import { LoginPage } from '../features/auth/LoginPage'
 import { RequireAuth, RequireRole } from '../features/auth/RequireAuth'
 import { ROLE_VIEWS } from '../features/auth/roles'
@@ -27,7 +29,8 @@ import { ForbiddenPage, NotFoundPage } from '../features/workspace/StatusPages'
  * /planificador                     Vista Planificador: bandeja de sus áreas autorizadas
  * /planificador/incidencias/:code   Detalle, priorización y programación
  * /responsable-area/*               Ruta anterior: redirige a /planificador/*
- * /personal-atencion                Vista Personal de Atención
+ * /personal-atencion                Bandeja del Personal de Atención
+ * /personal-atencion/incidencias/:code  Detalle e intervención técnica
  * /administrador                    Vista Administrador
  * /sin-acceso                       Vista no autorizada para el usuario
  *
@@ -35,7 +38,7 @@ import { ForbiddenPage, NotFoundPage } from '../features/workspace/StatusPages'
  */
 const LEGACY_PLANNER_PATH = '/responsable-area'
 
-function withRole(role: 'solicitante' | 'planificador', page: ReactNode) {
+function withRole(role: 'solicitante' | 'planificador' | 'personal_atencion', page: ReactNode) {
   return <RequireRole role={role}>{page}</RequireRole>
 }
 
@@ -72,8 +75,16 @@ export function AppRoutes() {
             element={withRole('planificador', <PlanningDetailPage />)}
           />
           <Route path={`${LEGACY_PLANNER_PATH}/*`} element={<LegacyPlannerRedirect />} />
+          <Route
+            path="/personal-atencion"
+            element={withRole('personal_atencion', <AttentionInboxPage />)}
+          />
+          <Route
+            path="/personal-atencion/incidencias/:code"
+            element={withRole('personal_atencion', <AttentionDetailPage />)}
+          />
           {ROLE_VIEWS.filter(
-            (view) => view.role !== 'solicitante' && view.role !== 'planificador',
+            (view) => !['solicitante', 'planificador', 'personal_atencion'].includes(view.role),
           ).map((view) => (
             <Route
               key={view.role}

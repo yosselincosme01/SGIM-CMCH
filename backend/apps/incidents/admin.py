@@ -5,6 +5,8 @@ from .models import (
     IncidentAssignment,
     IncidentAttachment,
     IncidentEvent,
+    IncidentIntervention,
+    IncidentVerification,
     PriorityLevel,
     SupportArea,
     SupportAreaMembership,
@@ -85,6 +87,40 @@ class AssignmentInline(admin.TabularInline):
         return False
 
 
+class _ReadOnlyInline(admin.TabularInline):
+    """Historial técnico: se consulta, pero nunca se crea, edita ni elimina desde el admin."""
+
+    extra = 0
+    can_delete = False
+
+    def has_add_permission(self, request, obj=None):
+        return False
+
+    def has_change_permission(self, request, obj=None):
+        return False
+
+
+class InterventionInline(_ReadOnlyInline):
+    model = IncidentIntervention
+    fields = (
+        "created_at",
+        "technician",
+        "result",
+        "diagnosis",
+        "actions_taken",
+        "used_parts",
+        "parts_required",
+        "unresolved_reason",
+    )
+    readonly_fields = fields
+
+
+class VerificationInline(_ReadOnlyInline):
+    model = IncidentVerification
+    fields = ("created_at", "verified_by", "result", "observations", "closing_intervention")
+    readonly_fields = fields
+
+
 class EventInline(admin.TabularInline):
     model = IncidentEvent
     extra = 0
@@ -126,11 +162,18 @@ class IncidentAdmin(admin.ModelAdmin):
         "qr_code",
         "qr_capture_method",
         "asset_reference",
+        "closing_intervention",
         "created_by",
         "created_at",
         "updated_at",
     )
-    inlines = (AttachmentInline, AssignmentInline, EventInline)
+    inlines = (
+        AttachmentInline,
+        AssignmentInline,
+        InterventionInline,
+        VerificationInline,
+        EventInline,
+    )
 
     def has_add_permission(self, request):
         return False

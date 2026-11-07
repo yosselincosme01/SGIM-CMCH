@@ -110,7 +110,7 @@ Todas las escrituras exigen CSRF.
 
 ### 6. Estados y trazabilidad
 
-- Solo existe la transición `registrada` → `asignada`, que ocurre en la primera programación.
+- La transición `registrada` → `asignada` ocurre en la primera programación. El ciclo completo (cierre, verificación y reapertura) se define en el [ADR 0006](0006-atencion-verificacion.md).
 - Cada cambio queda en `IncidentEvent`, con su autor y su fecha:
 
 | Evento | Qué registra |

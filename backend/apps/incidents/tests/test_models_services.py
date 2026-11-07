@@ -52,9 +52,9 @@ def test_users_are_not_linked_to_care_units():
     assert CareUnit not in relations
 
 
-def test_only_initial_planning_transition_is_implemented():
-    """Solo registrada → asignada; intervención, conformidad y cierre no existen aún."""
-    assert Incident.Status.values == ["registrada", "asignada"]
+def test_operational_statuses_are_explicit():
+    """Estado operativo del ticket (ADR 0006); resultados y verificaciones van aparte."""
+    assert Incident.Status.values == ["registrada", "asignada", "cerrada", "reabierta"]
 
 
 def test_future_workflow_entities_are_not_mixed_into_incident():

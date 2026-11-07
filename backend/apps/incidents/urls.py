@@ -1,13 +1,17 @@
 from django.urls import path, re_path
 
 from .views import (
+    AttentionListView,
     IncidentAttachmentView,
     IncidentDetailView,
+    IncidentInterventionView,
     IncidentListCreateView,
     IncidentOptionsView,
     IncidentPlanningView,
     IncidentPriorityView,
+    IncidentReopenView,
     IncidentTechniciansView,
+    IncidentVerificationView,
     PlanningListView,
     PlanningOptionsView,
 )
@@ -22,6 +26,7 @@ urlpatterns = [
     path("incidents/options/", IncidentOptionsView.as_view(), name="options"),
     path("incidents/planning/", PlanningListView.as_view(), name="planning-list"),
     path("incidents/planning/options/", PlanningOptionsView.as_view(), name="planning-options"),
+    path("incidents/attention/", AttentionListView.as_view(), name="attention-list"),
     re_path(rf"^incidents/{CODE}/$", IncidentDetailView.as_view(), name="detail"),
     re_path(
         rf"^incidents/{CODE}/attachments/(?P<pk>[0-9]+)/$",
@@ -35,4 +40,15 @@ urlpatterns = [
     ),
     re_path(rf"^incidents/{CODE}/priority/$", IncidentPriorityView.as_view(), name="priority"),
     re_path(rf"^incidents/{CODE}/planning/$", IncidentPlanningView.as_view(), name="planning"),
+    re_path(
+        rf"^incidents/{CODE}/interventions/$",
+        IncidentInterventionView.as_view(),
+        name="interventions",
+    ),
+    re_path(
+        rf"^incidents/{CODE}/verification/$",
+        IncidentVerificationView.as_view(),
+        name="verification",
+    ),
+    re_path(rf"^incidents/{CODE}/reopen/$", IncidentReopenView.as_view(), name="reopen"),
 ]

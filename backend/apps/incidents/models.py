@@ -132,10 +132,24 @@ class Incident(models.Model):
     """Incidencia registrada por un usuario autenticado."""
 
     class Status(models.TextChoices):
-        # Solo la transición inicial de planificación está implementada. Los estados
-        # definitivos están pendientes de validación (docs/adr/0004-planificacion.md).
+        """
+        Estado operativo del ticket (ADR 0006). Transiciones permitidas:
+
+        registrada ──programar──▶ asignada ──intervención "Solucionado"──▶ cerrada
+                                    ▲  │ (reprogramar/reasignar: sigue asignada)
+                                    │  └─ intervención "En proceso"/"No solucionado":
+                                    │     sigue asignada (pendiente para el Planificador)
+        reabierta ◀──reabrir (tras verificación "No conforme")── cerrada
+            └──programar──▶ asignada
+
+        El resultado de cada intervención y el de la verificación se guardan aparte
+        (IncidentIntervention, IncidentVerification): no son estados del ticket.
+        """
+
         REGISTRADA = "registrada", "Registrada"
         ASIGNADA = "asignada", "Asignada"
+        CERRADA = "cerrada", "Cerrada"
+        REABIERTA = "reabierta", "Reabierta"
 
     # Alias para usar Incident.EquipmentQrStatus / Incident.QrCaptureMethod.
     EquipmentQrStatus = EquipmentQrStatus
@@ -214,6 +228,17 @@ class Incident(models.Model):
         verbose_name="registrada por",
         editable=False,
     )
+    # Cierre técnico vigente: la intervención "Solucionado" que cerró el ciclo actual.
+    # Al reabrir vuelve a NULL; los cierres anteriores siguen en sus intervenciones.
+    closing_intervention = models.OneToOneField(
+        "IncidentIntervention",
+        on_delete=models.PROTECT,
+        related_name="closed_incident",
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name="cierre técnico vigente",
+    )
     created_at = models.DateTimeField("registrada", auto_now_add=True)
     updated_at = models.DateTimeField("actualizada", auto_now=True)
 
@@ -248,6 +273,12 @@ class Incident(models.Model):
                 | (~Q(equipment_qr_status="qr_readable") & Q(qr_code="", qr_capture_method="")),
                 name="incident_qr_code_matches_status",
             ),
+            # Cerrada si y solo si hay un cierre técnico vigente.
+            models.CheckConstraint(
+                condition=Q(status="cerrada", closing_intervention__isnull=False)
+                | (~Q(status="cerrada") & Q(closing_intervention__isnull=True)),
+                name="incident_closed_has_closure",
+            ),
         ]
 
     def __str__(self) -> str:
@@ -274,6 +305,16 @@ class IncidentAttachment(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
     )
     uploaded_at = models.DateTimeField("subido")
+    # Vacío: evidencia del registro. Con valor: evidencia técnica de una intervención,
+    # que solo ve el personal del área.
+    intervention = models.ForeignKey(
+        "IncidentIntervention",
+        on_delete=models.PROTECT,
+        related_name="photos",
+        null=True,
+        blank=True,
+        verbose_name="intervención",
+    )
 
     class Meta:
         verbose_name = "evidencia"
@@ -296,6 +337,10 @@ class IncidentEvent(models.Model):
         ASSIGNED = "assigned", "Atención programada"
         TECHNICIAN_CHANGED = "technician_changed", "Técnico responsable reasignado"
         SCHEDULE_CHANGED = "schedule_changed", "Atención reprogramada"
+        INTERVENTION = "intervention", "Intervención registrada"
+        CLOSED = "closed", "Cerrada (cierre técnico)"
+        VERIFIED = "verified", "Verificación registrada"
+        REOPENED = "reopened", "Reabierta"
 
     incident = models.ForeignKey(Incident, on_delete=models.CASCADE, related_name="events")
     event_type = models.CharField("tipo", max_length=40, choices=Type.choices)
@@ -374,3 +419,124 @@ class IncidentAssignment(models.Model):
 
     def __str__(self) -> str:
         return f"{self.incident} · {self.technician}"
+
+
+class IncidentIntervention(models.Model):
+    """
+    Intervención técnica del Personal de Atención (ADR 0006). Se registra sobre la
+    asignación vigente y **no se edita ni se elimina**: cada nueva atención es una
+    intervención nueva.
+    """
+
+    class Result(models.TextChoices):
+        SOLVED = "solved", "Solucionado"
+        IN_PROGRESS = "in_progress", "En proceso"
+        NOT_SOLVED = "not_solved", "No solucionado"
+
+    incident = models.ForeignKey(Incident, on_delete=models.PROTECT, related_name="interventions")
+    assignment = models.ForeignKey(
+        IncidentAssignment,
+        on_delete=models.PROTECT,
+        related_name="interventions",
+        verbose_name="asignación",
+    )
+    technician = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="incident_interventions",
+        verbose_name="registrada por",
+    )
+    diagnosis = models.TextField("diagnóstico técnico")
+    actions_taken = models.TextField("acciones realizadas")
+    result = models.CharField("resultado", max_length=20, choices=Result.choices)
+    used_parts = models.BooleanField("se utilizaron repuestos")
+    used_parts_detail = models.TextField("repuestos utilizados", blank=True)
+    parts_required = models.BooleanField("se requieren repuestos")
+    parts_required_detail = models.TextField("repuestos requeridos", blank=True)
+    unresolved_reason = models.TextField(
+        "motivo", blank=True, help_text="Obligatorio si no quedó solucionado."
+    )
+    observations = models.TextField("observaciones", blank=True)
+    created_at = models.DateTimeField("registrada", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "intervención"
+        verbose_name_plural = "intervenciones"
+        ordering = ("created_at", "id")
+        indexes = [
+            models.Index(fields=("incident", "created_at"), name="intervention_incident_idx")
+        ]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(result__in=["solved", "in_progress", "not_solved"]),
+                name="intervention_result_valid",
+            ),
+            models.CheckConstraint(
+                condition=~Q(diagnosis="") & ~Q(actions_taken=""),
+                name="intervention_required_texts",
+            ),
+            models.CheckConstraint(
+                condition=Q(used_parts=False, used_parts_detail="")
+                | (Q(used_parts=True) & ~Q(used_parts_detail="")),
+                name="intervention_used_parts_detail",
+            ),
+            models.CheckConstraint(
+                condition=Q(parts_required=False, parts_required_detail="")
+                | (Q(parts_required=True) & ~Q(parts_required_detail="")),
+                name="intervention_required_parts_detail",
+            ),
+            models.CheckConstraint(
+                condition=Q(result="solved", unresolved_reason="")
+                | (~Q(result="solved") & ~Q(unresolved_reason="")),
+                name="intervention_reason_when_unresolved",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.incident} · {self.get_result_display()}"
+
+
+class IncidentVerification(models.Model):
+    """
+    Verificación del Planificador sobre un cierre técnico (ADR 0006). Una por cierre:
+    las verificaciones anteriores nunca se sobrescriben.
+    """
+
+    class Result(models.TextChoices):
+        CONFORMING = "conforming", "Conforme"
+        NOT_CONFORMING = "not_conforming", "No conforme"
+
+    incident = models.ForeignKey(Incident, on_delete=models.PROTECT, related_name="verifications")
+    closing_intervention = models.OneToOneField(
+        IncidentIntervention,
+        on_delete=models.PROTECT,
+        related_name="verification",
+        verbose_name="cierre verificado",
+    )
+    result = models.CharField("resultado", max_length=20, choices=Result.choices)
+    observations = models.TextField("observaciones", blank=True)
+    verified_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="+",
+        verbose_name="verificada por",
+    )
+    created_at = models.DateTimeField("verificada", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "verificación"
+        verbose_name_plural = "verificaciones"
+        ordering = ("created_at", "id")
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(result__in=["conforming", "not_conforming"]),
+                name="verification_result_valid",
+            ),
+            models.CheckConstraint(
+                condition=Q(result="conforming") | ~Q(observations=""),
+                name="verification_observations_when_not_conforming",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.incident} · {self.get_result_display()}"

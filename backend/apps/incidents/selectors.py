@@ -14,7 +14,7 @@ Todas las reglas de acceso por área pasan por este módulo (ADR 0004):
 """
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Exists, Min, OuterRef, Prefetch, Q, QuerySet
+from django.db.models import Count, Exists, Min, OuterRef, Prefetch, Q, QuerySet, Subquery
 
 from apps.accounts.roles import Role, has_role
 
@@ -26,7 +26,12 @@ from .models import (
     SupportAreaMembership,
 )
 
-PLANNABLE_STATUSES = (Incident.Status.REGISTRADA, Incident.Status.ASIGNADA)
+# Estados en los que el Planificador puede priorizar y programar (ADR 0006).
+PLANNABLE_STATUSES = (
+    Incident.Status.REGISTRADA,
+    Incident.Status.ASIGNADA,
+    Incident.Status.REABIERTA,
+)
 
 
 # --- Áreas por función ------------------------------------------------------
@@ -153,3 +158,81 @@ def assignable_technicians(area: SupportArea):
 
 def is_assignable_technician(user, area: SupportArea) -> bool:
     return user is not None and assignable_technicians(area).filter(pk=user.pk).exists()
+
+
+# --- Atención, pendientes y verificación (ADR 0006) ------------------------------
+
+
+def latest_intervention_result_subquery():
+    """Resultado de la última intervención registrada sobre la asignación vigente."""
+    from .models import IncidentIntervention
+
+    return Subquery(
+        IncidentIntervention.objects.filter(incident=OuterRef("pk"), assignment__is_current=True)
+        .order_by("-created_at", "-id")
+        .values("result")[:1]
+    )
+
+
+def attention_incidents(user) -> QuerySet[Incident]:
+    """
+    Bandeja del Personal de Atención: incidencias que tiene asignadas ahora mismo y las
+    que cerró él, solo en áreas donde sigue siendo técnico autorizado.
+    """
+    if not has_role(user, Role.PERSONAL_ATENCION):
+        return Incident.objects.none()
+    assigned_now = IncidentAssignment.objects.filter(is_current=True, technician=user).values(
+        "incident_id"
+    )
+    return (
+        base_queryset()
+        .filter(support_area__in=technician_areas(user))
+        .filter(
+            Q(status=Incident.Status.ASIGNADA, pk__in=assigned_now)
+            | Q(status=Incident.Status.CERRADA, closing_intervention__technician=user)
+        )
+        .annotate(last_result=latest_intervention_result_subquery())
+        .prefetch_related(current_assignment_prefetch())
+    )
+
+
+def pending_queue(queryset: QuerySet[Incident]) -> QuerySet[Incident]:
+    """Abiertas cuya última intervención quedó "En proceso" o "No solucionado"."""
+    from .models import IncidentIntervention
+
+    return queryset.filter(status=Incident.Status.ASIGNADA).filter(
+        last_result__in=[
+            IncidentIntervention.Result.IN_PROGRESS,
+            IncidentIntervention.Result.NOT_SOLVED,
+        ]
+    )
+
+
+def verification_queue(queryset: QuerySet[Incident]) -> QuerySet[Incident]:
+    """Cerradas cuyo cierre técnico vigente todavía no se verificó."""
+    return queryset.filter(
+        status=Incident.Status.CERRADA, closing_intervention__verification__isnull=True
+    )
+
+
+def can_intervene(user, incident: Incident) -> bool:
+    """Solo el técnico asignado ahora, autorizado en el área y con el ticket abierto."""
+    if incident.status != Incident.Status.ASIGNADA:
+        return False
+    current = current_assignment(incident)
+    return (
+        current is not None
+        and current.technician_id == user.pk
+        and is_assignable_technician(user, incident.support_area)
+    )
+
+
+def closing_verification(incident: Incident):
+    """Verificación del cierre vigente, si existe."""
+    if not incident.closing_intervention_id:
+        return None
+    from .models import IncidentVerification
+
+    return IncidentVerification.objects.filter(
+        closing_intervention_id=incident.closing_intervention_id
+    ).first()

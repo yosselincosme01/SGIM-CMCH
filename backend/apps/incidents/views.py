@@ -15,23 +15,27 @@ from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import IsPlanificador, IsSolicitante
+from apps.accounts.permissions import IsPersonalAtencion, IsPlanificador, IsSolicitante
 from apps.catalogs.models import CareUnit
 
-from . import planning_services, selectors, services
+from . import attention_services, planning_services, selectors, services
 from .models import Incident, PriorityLevel, SupportArea
 from .serializers import (
+    AttentionListSerializer,
     CareUnitOptionSerializer,
     IncidentCreateSerializer,
     IncidentDetailSerializer,
     IncidentListSerializer,
+    InterventionInputSerializer,
     PlanningInputSerializer,
     PlanningListSerializer,
     PriorityInputSerializer,
     PriorityLevelSerializer,
+    ReopenInputSerializer,
     RequesterIncidentDetailSerializer,
     SupportAreaOptionSerializer,
     TechnicianSerializer,
+    VerificationInputSerializer,
     display_time_zone,
 )
 
@@ -47,11 +51,18 @@ class Conflict(APIException):
 
 
 def _detail_queryset(user):
-    return selectors.visible_incidents(user).prefetch_related(
-        "attachments",
-        "events__actor",
-        "events__incident__support_area",
-        selectors.current_assignment_prefetch(),
+    return (
+        selectors.visible_incidents(user)
+        .select_related("closing_intervention__technician")
+        .prefetch_related(
+            "attachments",
+            "events__actor",
+            "events__incident__support_area",
+            "interventions__technician",
+            "interventions__photos__incident",
+            "interventions__verification__verified_by",
+            selectors.current_assignment_prefetch(),
+        )
     )
 
 
@@ -156,6 +167,9 @@ class IncidentAttachmentView(APIView):
     def get(self, request: Request, code: str, pk: int):
         incident = _visible_incident_or_404(request, code)
         attachment = get_object_or_404(incident.attachments, pk=pk)
+        # La evidencia técnica de una intervención solo la ve el personal del área.
+        if attachment.intervention_id and not selectors.can_view_as_staff(request.user, incident):
+            raise Http404
         try:
             handle = attachment.file.open("rb")
         except FileNotFoundError as exc:
@@ -195,7 +209,13 @@ class PlanningOptionsView(APIView):
                 ).data,
                 "counts": {
                     "unprioritized": open_inbox.filter(priority__isnull=True).count(),
-                    "unassigned": open_inbox.filter(status=Incident.Status.REGISTRADA).count(),
+                    "unassigned": open_inbox.filter(
+                        status__in=[Incident.Status.REGISTRADA, Incident.Status.REABIERTA]
+                    ).count(),
+                    "pending": selectors.pending_queue(
+                        inbox.annotate(last_result=selectors.latest_intervention_result_subquery())
+                    ).count(),
+                    "to_verify": selectors.verification_queue(inbox).count(),
                     "scheduled_today": inbox.filter(
                         assignments__is_current=True,
                         assignments__scheduled_at__gte=today_start,
@@ -228,7 +248,17 @@ class PlanningListView(generics.ListAPIView):
 
     def get_queryset(self):
         params = self.request.query_params
-        queryset = selectors.planning_incidents(self.request.user)
+        queryset = selectors.planning_incidents(self.request.user).annotate(
+            last_result=selectors.latest_intervention_result_subquery()
+        )
+        # Colas de trabajo del Planificador (ADR 0006).
+        queue = params.get("queue", "")
+        if queue == "pending":
+            queryset = selectors.pending_queue(queryset)
+        elif queue == "verification":
+            queryset = selectors.verification_queue(queryset)
+        elif queue:
+            raise serializers.ValidationError({"queue": "Cola no válida."})
 
         if area := params.get("area"):
             queryset = queryset.filter(support_area__code=area)
@@ -342,5 +372,101 @@ class IncidentPlanningView(_PlanningActionView):
             notes=data["notes"],
             reason=data["reason"],
             expected_assignment_id=data["expected_assignment"],
+        )
+        return _detail_response(request, incident)
+
+
+# --- Atención, verificación y reapertura (ADR 0006) ------------------------------
+
+
+class AttentionListView(generics.ListAPIView):
+    """
+    Bandeja del Personal de Atención: sus asignaciones vigentes y las que cerró.
+    Filtros: ``status`` (asignada o cerrada), ``scheduled_on`` (AAAA-MM-DD, hora de Lima).
+    """
+
+    serializer_class = AttentionListSerializer
+    permission_classes = [IsAuthenticated, IsPersonalAtencion]
+
+    def get_queryset(self):
+        params = self.request.query_params
+        queryset = selectors.attention_incidents(self.request.user)
+        if state := params.get("status"):
+            if state not in (Incident.Status.ASIGNADA, Incident.Status.CERRADA):
+                raise serializers.ValidationError({"status": "Estado no válido."})
+            queryset = queryset.filter(status=state)
+        if scheduled_on := params.get("scheduled_on"):
+            try:
+                day = date.fromisoformat(scheduled_on)
+            except ValueError as exc:
+                raise serializers.ValidationError({"scheduled_on": "Fecha no válida."}) from exc
+            start, end = _lima_day_range(day)
+            queryset = queryset.filter(
+                assignments__is_current=True,
+                assignments__scheduled_at__gte=start,
+                assignments__scheduled_at__lt=end,
+            )
+        return queryset.annotate(
+            current_scheduled_at=Min(
+                "assignments__scheduled_at", filter=Q(assignments__is_current=True)
+            )
+        ).order_by(F("current_scheduled_at").asc(nulls_last=True), "-updated_at", "-id")
+
+
+class IncidentInterventionView(_PlanningActionView):
+    """Registra una intervención del técnico asignado actualmente (multipart, con fotos)."""
+
+    permission_classes = [IsAuthenticated, IsPersonalAtencion]
+    parser_classes = [MultiPartParser]
+
+    def get_incident(self, request: Request, code: str) -> Incident:
+        # Un ticket que el usuario no ve responde 404; los permisos finos los aplica
+        # el servicio (técnico asignado, área autorizada y estado abierto).
+        return _visible_incident_or_404(request, code)
+
+    def post(self, request: Request, code: str) -> Response:
+        incident = self.get_incident(request, code)
+        serializer = InterventionInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = dict(serializer.validated_data)
+        self.run(
+            attention_services.register_intervention,
+            incident=incident,
+            actor=request.user,
+            expected_assignment_id=data.pop("assignment"),
+            photos=data.pop("photos"),
+            **data,
+        )
+        return _detail_response(request, incident, status.HTTP_201_CREATED)
+
+
+class IncidentVerificationView(_PlanningActionView):
+    """El Planificador del área registra Conforme o No conforme sobre el cierre vigente."""
+
+    def post(self, request: Request, code: str) -> Response:
+        incident = self.get_incident(request, code)
+        serializer = VerificationInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.run(
+            attention_services.verify_closure,
+            incident=incident,
+            actor=request.user,
+            **serializer.validated_data,
+        )
+        return _detail_response(request, incident)
+
+
+class IncidentReopenView(_PlanningActionView):
+    """Reabre un cierre verificado como No conforme (motivo obligatorio)."""
+
+    def post(self, request: Request, code: str) -> Response:
+        incident = self.get_incident(request, code)
+        serializer = ReopenInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.run(
+            attention_services.reopen_incident,
+            incident=incident,
+            actor=request.user,
+            **serializer.validated_data,
         )
         return _detail_response(request, incident)

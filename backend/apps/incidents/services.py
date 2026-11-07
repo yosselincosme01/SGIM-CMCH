@@ -63,26 +63,10 @@ def create_incident(
     incident.save(update_fields=["code"])
 
     attachment = None
-    stored_file = None
+    stored_files: list = []
     try:
         if evidence is not None:
-            if not isinstance(evidence, EvidenceImage):
-                raise TypeError("La evidencia debe prepararse con prepare_evidence_image.")
-            info = evidence.info
-            attachment = IncidentAttachment(
-                incident=incident,
-                original_name=evidence.original_name,
-                content_type=info.content_type,
-                extension=info.extension,
-                size=info.size,
-                width=info.width,
-                height=info.height,
-                uploaded_by=user,
-                uploaded_at=timezone.now(),
-            )
-            attachment.file.save("evidencia", evidence.file, save=False)
-            stored_file = (attachment.file.storage, attachment.file.name)
-            attachment.save()
+            attachment = save_evidence(incident, evidence, user, stored_files)
 
         IncidentEvent.objects.create(
             incident=incident,
@@ -92,9 +76,39 @@ def create_incident(
             details={"has_attachment": attachment is not None},
         )
     except Exception:
-        # La transacción se revierte: el archivo ya escrito no debe quedar huérfano.
-        if stored_file:
-            storage, name = stored_file
-            storage.delete(name)
+        delete_stored_files(stored_files)
         raise
     return incident
+
+
+def save_evidence(incident, evidence, user, stored_files: list, intervention=None):
+    """
+    Guarda una evidencia ya validada y sin metadatos (``prepare_evidence_image``),
+    con nombre aleatorio. Anota el archivo en ``stored_files`` para poder borrarlo si
+    la transacción falla después.
+    """
+    if not isinstance(evidence, EvidenceImage):
+        raise TypeError("La evidencia debe prepararse con prepare_evidence_image.")
+    info = evidence.info
+    attachment = IncidentAttachment(
+        incident=incident,
+        intervention=intervention,
+        original_name=evidence.original_name,
+        content_type=info.content_type,
+        extension=info.extension,
+        size=info.size,
+        width=info.width,
+        height=info.height,
+        uploaded_by=user,
+        uploaded_at=timezone.now(),
+    )
+    attachment.file.save("evidencia", evidence.file, save=False)
+    stored_files.append((attachment.file.storage, attachment.file.name))
+    attachment.save()
+    return attachment
+
+
+def delete_stored_files(stored_files: list) -> None:
+    """La transacción se revierte: los archivos ya escritos no deben quedar huérfanos."""
+    for storage, name in stored_files:
+        storage.delete(name)

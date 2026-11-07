@@ -176,7 +176,7 @@ def test_planner_of_one_area_and_technician_of_another(
     assert [item["code"] for item in inbox["results"]] == [ti.code]
     assert [area["code"] for area in options["areas"]] == ["ti"]
     # Ve la incidencia de Mantenimiento como técnico, pero no puede planificarla.
-    assert client.get(detail(mant.code)).json()["permissions"] == {"can_plan": False}
+    assert client.get(detail(mant.code)).json()["permissions"]["can_plan"] is False
     response = client.put(priority_url(mant.code), {"priority": "alta"}, format="json")
     assert response.status_code == status.HTTP_403_FORBIDDEN
 
@@ -230,7 +230,7 @@ def test_inbox_filters_and_ordering(client_for, planner, tech, solicitante, care
     assert codes("area=mantenimiento") == []
     assert codes("ordering=priority") == [first.code, second.code]  # sin prioridad primero
     assert client.get(f"{PLANNING_LIST}?ordering=password").status_code == 400
-    assert client.get(f"{PLANNING_LIST}?status=cerrada").status_code == 400
+    assert client.get(f"{PLANNING_LIST}?status=inventado").status_code == 400
 
 
 def test_options_counts(client_for, planner, tech, solicitante, care_unit, area_ti):
@@ -241,7 +241,13 @@ def test_options_counts(client_for, planner, tech, solicitante, care_unit, area_
 
     body = client.get(PLANNING_OPTIONS).json()
 
-    assert body["counts"] == {"unprioritized": 1, "unassigned": 2, "scheduled_today": 0}
+    assert body["counts"] == {
+        "unprioritized": 1,
+        "unassigned": 2,
+        "scheduled_today": 0,
+        "pending": 0,
+        "to_verify": 0,
+    }
     assert [level["code"] for level in body["priorities"]] == ["critica", "alta", "media", "baja"]
     assert all(level["is_provisional"] for level in body["priorities"])
 
@@ -398,7 +404,7 @@ def test_initial_scheduling_assigns_and_records_history(client_for, planner, tec
     assert body["priority"]["code"] == "alta"
     assert body["assignment"]["technician"]["username"] == tech.username
     assert body["assignment"]["notes"] == "Coordinar con admisión"
-    assert body["permissions"] == {"can_plan": True}
+    assert body["permissions"]["can_plan"] is True
 
     assignment = ti_incident.assignments.get()
     assert assignment.is_current and assignment.assigned_by == planner
@@ -728,9 +734,9 @@ def test_staff_detail_includes_planning_data(client_for, planner, tech, planned)
     as_tech = client_for(tech).get(detail(planned.code)).json()
 
     assert as_planner["assignment"]["notes"] == "Llevar repuesto"
-    assert as_planner["permissions"] == {"can_plan": True}
+    assert as_planner["permissions"]["can_plan"] is True
     assert as_tech["priority"]["code"] == "alta"
-    assert as_tech["permissions"] == {"can_plan": False}
+    assert as_tech["permissions"]["can_plan"] is False
 
 
 def test_requester_list_does_not_expose_planning(client_for, solicitante, planned):

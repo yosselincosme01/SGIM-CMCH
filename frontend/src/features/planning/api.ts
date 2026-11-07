@@ -17,7 +17,13 @@ import type {
 export interface PlanningOptions {
   areas: SupportAreaOption[]
   priorities: PriorityLevel[]
-  counts: { unprioritized: number; unassigned: number; scheduled_today: number }
+  counts: {
+    unprioritized: number
+    unassigned: number
+    scheduled_today: number
+    pending: number
+    to_verify: number
+  }
 }
 
 export interface PlanningItem {
@@ -32,6 +38,9 @@ export interface PlanningItem {
   priority: PriorityLevel | null
   assignment: { id: number; technician: Person; scheduled_at: string } | null
   has_attachments: boolean
+  /** Resultado de la última intervención de la asignación vigente. */
+  last_result: { code: string; label: string } | null
+  pending_verification: boolean
 }
 
 export interface Technician extends Person {
@@ -44,6 +53,8 @@ export interface PlanningFilters {
   status?: string
   priority?: string
   scheduled_on?: string
+  /** Colas de trabajo: pendientes o por verificar. */
+  queue?: string
   q?: string
   ordering?: string
   page?: number
