@@ -74,17 +74,36 @@ def _media_root(settings, tmp_path):
 
 @pytest.fixture
 def make_user(db):
-    def _make_user(username: str, *roles: Role, areas: tuple[str, ...] = ()):
+    def _make_user(
+        username: str,
+        *roles: Role,
+        areas: tuple[str, ...] = (),
+        plans: tuple[str, ...] = (),
+        assigned: tuple[str, ...] = (),
+        is_superuser: bool = False,
+    ):
+        """
+        ``areas``: pertenencia sin funciones (no da acceso por sí sola).
+        ``plans``: pertenencia con ``can_plan=True``.
+        ``assigned``: pertenencia con ``can_be_assigned=True``.
+        """
         user = get_user_model().objects.create_user(
             username=username,
             password=PASSWORD,
             email=f"{username}@example.test",
             first_name=username.split(".")[0].title(),
             last_name="Prueba",
+            is_superuser=is_superuser,
+            is_staff=is_superuser,
         )
         user.groups.add(*Group.objects.filter(name__in=roles))
-        for code in areas:
-            SupportAreaMembership.objects.create(area=SupportArea.objects.get(code=code), user=user)
+        for code in {*areas, *plans, *assigned}:
+            SupportAreaMembership.objects.create(
+                area=SupportArea.objects.get(code=code),
+                user=user,
+                can_plan=code in plans,
+                can_be_assigned=code in assigned,
+            )
         return user
 
     return _make_user

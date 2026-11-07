@@ -63,10 +63,21 @@ def test_inactive_user_has_no_roles(make_user):
 
 
 @pytest.mark.django_db
-def test_superuser_passes_role_checks(make_user):
+def test_superuser_does_not_get_functional_roles_automatically(make_user):
+    """Sin acceso global automático: el superusuario necesita roles explícitos."""
     user = make_user(is_superuser=True, is_staff=True)
 
-    assert has_role(user, Role.PLANIFICADOR)
+    assert get_roles(user) == []
+    for role in Role:
+        assert not has_role(user, role)
+
+
+@pytest.mark.django_db
+def test_superuser_with_explicit_role_has_only_that_role(make_user):
+    user = make_user(roles=[Role.SOLICITANTE], is_superuser=True, is_staff=True)
+
+    assert has_role(user, Role.SOLICITANTE)
+    assert not has_role(user, Role.PLANIFICADOR)
 
 
 @pytest.mark.django_db

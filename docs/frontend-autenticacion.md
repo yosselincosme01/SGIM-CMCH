@@ -10,7 +10,9 @@ React 19 + TypeScript + Vite, React Router 8. Consume solo los endpoints existen
 | `/login` | Público | Inicio de sesión |
 | `/` | Con sesión | Inicio: vistas autorizadas según los roles |
 | `/solicitante` | Rol `solicitante` | Vista Solicitante |
-| `/responsable-area` | Rol `planificador` | Vista Responsable de Área |
+| `/planificador` | Rol `planificador` | Vista Planificador: bandeja de sus áreas autorizadas |
+| `/planificador/incidencias/:code` | Rol `planificador` | Detalle, priorización y programación |
+| `/responsable-area/*` | Con sesión | Ruta anterior: redirige a `/planificador/*` |
 | `/personal-atencion` | Rol `personal_atencion` | Vista Personal de Atención |
 | `/administrador` | Rol `administrador` | Vista Administrador |
 | `/sin-acceso` | Con sesión | La vista pedida no corresponde a los roles del usuario |

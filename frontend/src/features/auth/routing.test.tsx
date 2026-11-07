@@ -78,7 +78,7 @@ describe('rutas protegidas', () => {
 describe('redirección segura tras el login', () => {
   it.each([
     ['/solicitante', '/solicitante'],
-    ['/responsable-area?x=1', '/responsable-area?x=1'],
+    ['/planificador?x=1', '/planificador?x=1'],
     ['https://evil.example', '/'],
     ['//evil.example', '/'],
     ['/\\evil.example', '/'],

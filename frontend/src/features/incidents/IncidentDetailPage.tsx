@@ -7,8 +7,9 @@ import { Alert } from '../../shared/ui/Alert'
 import { LoadingState } from '../../shared/ui/LoadingState'
 import { fetchIncident, type IncidentDetail } from './api'
 import { IncidentBreadcrumb } from './IncidentBreadcrumb'
+import { IncidentEvidence, IncidentHistory, IncidentSummaryCard } from './IncidentDetailSections'
 import { StatusBadge } from './StatusBadge'
-import { formatBytes, formatDateTime } from './validation'
+import { formatDateTime } from './validation'
 
 type LoadState =
   | { status: 'loading' }
@@ -16,6 +17,7 @@ type LoadState =
   | { status: 'error'; message: string }
   | { status: 'ready'; incident: IncidentDetail }
 
+/** Detalle de una incidencia propia (vista Solicitante). */
 export function IncidentDetailPage() {
   const { code = '' } = useParams()
   const [state, setState] = useState<LoadState>({ status: 'loading' })
@@ -74,83 +76,23 @@ export function IncidentDetailPage() {
         <StatusBadge status={incident.status} label={incident.status_label} />
       </header>
 
-      <section className="detail-card" aria-labelledby="detail-summary">
-        <h2 id="detail-summary" className="detail-card__title">
-          Datos de la incidencia
-        </h2>
-        <dl className="detail-grid">
-          <div>
-            <dt>UPS / servicio</dt>
-            <dd>{incident.care_unit.name}</dd>
-          </div>
-          <div>
-            <dt>Área de soporte</dt>
-            <dd>{incident.support_area.name}</dd>
-          </div>
-          <div>
-            <dt>Equipo o activo</dt>
-            <dd>{incident.asset_reference || 'No indicado'}</dd>
-          </div>
-          <div>
-            <dt>Registrada por</dt>
-            <dd>{incident.created_by.full_name}</dd>
-          </div>
-          <div className="detail-grid__wide">
-            <dt>Descripción del problema</dt>
-            <dd className="preserve-lines">{incident.description}</dd>
-          </div>
-          <div className="detail-grid__wide">
-            <dt>Acciones previas</dt>
-            <dd className="preserve-lines">{incident.prior_actions || 'No indicadas'}</dd>
-          </div>
-        </dl>
-      </section>
+      {incident.scheduled_at && (
+        <section className="detail-card schedule-note" aria-labelledby="detail-schedule">
+          <h2 id="detail-schedule" className="detail-card__title">
+            Atención programada
+          </h2>
+          <p>
+            Fecha estimada de atención:{' '}
+            <strong data-testid="scheduled-at">{formatDateTime(incident.scheduled_at)}</strong>{' '}
+            (hora de Lima)
+          </p>
+          <p className="muted">La fecha es estimada y el área de soporte puede reprogramarla.</p>
+        </section>
+      )}
 
-      <section className="detail-card" aria-labelledby="detail-evidence">
-        <h2 id="detail-evidence" className="detail-card__title">
-          Evidencia
-        </h2>
-        {incident.attachments.length === 0 ? (
-          <p className="muted">No se adjuntaron imágenes.</p>
-        ) : (
-          <ul className="evidence-list">
-            {incident.attachments.map((attachment) => (
-              <li key={attachment.id} className="evidence">
-                <img
-                  src={attachment.url}
-                  alt={`Evidencia adjunta a ${incident.code}`}
-                  width={attachment.width}
-                  height={attachment.height}
-                  loading="lazy"
-                  className="evidence__image"
-                />
-                <p className="evidence__meta">
-                  {attachment.original_name} · {formatBytes(attachment.size)} ·{' '}
-                  <a href={attachment.url} target="_blank" rel="noopener noreferrer">
-                    Abrir imagen
-                  </a>
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="detail-card" aria-labelledby="detail-history">
-        <h2 id="detail-history" className="detail-card__title">
-          Historial
-        </h2>
-        <ol className="timeline">
-          {incident.events.map((event, index) => (
-            <li key={`${event.event_type}-${index}`} className="timeline__item">
-              <span className="timeline__label">{event.label}</span>
-              <span className="timeline__meta">
-                {formatDateTime(event.created_at)} · {event.actor}
-              </span>
-            </li>
-          ))}
-        </ol>
-      </section>
+      <IncidentSummaryCard incident={incident} />
+      <IncidentEvidence incident={incident} />
+      <IncidentHistory events={incident.events} />
 
       <p>
         <Link to="/solicitante/incidencias" className="btn btn--secondary">

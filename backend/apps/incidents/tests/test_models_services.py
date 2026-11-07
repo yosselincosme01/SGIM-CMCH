@@ -52,8 +52,9 @@ def test_users_are_not_linked_to_care_units():
     assert CareUnit not in relations
 
 
-def test_only_initial_status_is_implemented():
-    assert Incident.Status.values == ["registrada"]
+def test_only_initial_planning_transition_is_implemented():
+    """Solo registrada → asignada; intervención, conformidad y cierre no existen aún."""
+    assert Incident.Status.values == ["registrada", "asignada"]
 
 
 def test_future_workflow_entities_are_not_mixed_into_incident():
@@ -141,7 +142,9 @@ def test_raw_upload_is_never_stored(solicitante, care_unit, area_ti):
     assert Incident.objects.count() == 0
 
 
-@pytest.mark.django_db(transaction=True)
+# serialized_rollback: restaura los datos de las migraciones (áreas, prioridades)
+# que el vaciado de una prueba transaccional borraría para las pruebas siguientes.
+@pytest.mark.django_db(transaction=True, serialized_rollback=True)
 @pytest.mark.skipif(
     connection.vendor != "postgresql", reason="Concurrencia real solo en PostgreSQL"
 )

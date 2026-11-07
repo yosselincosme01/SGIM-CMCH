@@ -61,7 +61,7 @@ describe('logotipo institucional en las vistas internas', () => {
   it.each([
     ['/solicitante', USERS.solicitante],
     ['/administrador', USERS.administrador],
-    ['/responsable-area', USERS.multirol],
+    ['/planificador', USERS.multirol],
     ['/personal-atencion', USERS.multirol],
   ])('%s usa la barra guinda con el logotipo de fondo guinda', async (route, user) => {
     backend.signIn(user)
@@ -79,7 +79,7 @@ describe('logotipo institucional en las vistas internas', () => {
     ['/', USERS.multirol],
     ['/solicitante', USERS.solicitante],
     ['/administrador', USERS.administrador],
-    ['/responsable-area', USERS.multirol],
+    ['/planificador', USERS.multirol],
     ['/personal-atencion', USERS.multirol],
   ])('%s: el logotipo está en el extremo izquierdo, antes del nombre SGIM-CMCH', async (route, user) => {
     backend.signIn(user)

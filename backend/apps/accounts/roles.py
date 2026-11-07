@@ -31,12 +31,11 @@ def has_role(user, roles: Role | str | Iterable[Role | str]) -> bool:
     """
     True si el usuario tiene al menos uno de los roles indicados.
 
-    Los superusuarios (soporte técnico) pasan todas las comprobaciones,
-    igual que ocurre con los permisos de Django.
+    Los roles siempre son explícitos: ser superusuario o administrador **no** concede
+    roles funcionales ni acceso global a incidencias. El superusuario solo administra
+    el sitio de administración de Django.
     """
     if not getattr(user, "is_authenticated", False) or not user.is_active:
         return False
-    if user.is_superuser:
-        return True
     wanted = {roles} if isinstance(roles, str) else set(roles)
     return user.groups.filter(name__in=wanted).exists()

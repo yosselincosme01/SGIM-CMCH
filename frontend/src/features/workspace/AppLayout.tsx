@@ -10,8 +10,8 @@ import { SessionMonitor } from '../session/SessionMonitor'
 const HOME_VALUE = '/'
 
 /**
- * Layout común de las vistas autenticadas (Administrador, Solicitante, Responsable de
- * Área y Personal de Atención): barra superior guinda con el logotipo institucional en
+ * Layout común de las vistas autenticadas (Administrador, Solicitante, Planificador y
+ * Personal de Atención): barra superior guinda con el logotipo institucional en
  * el extremo izquierdo, seguido de la identidad textual de SGIM-CMCH; a la derecha, el
  * selector de vista, el usuario y el cierre de sesión.
  */
