@@ -1,5 +1,12 @@
 /** Endpoints de incidencias (backend/apps/incidents). */
 import { apiRequest } from '../../shared/api/client'
+import {
+  type EquipmentMode,
+  type EquipmentQrStatus,
+  type NoQrReason,
+  type QrCaptureMethod,
+  statusFor,
+} from './equipment'
 
 export interface CareUnitOption {
   code: string
@@ -74,7 +81,11 @@ export interface CurrentAssignment {
 export interface IncidentDetail extends Omit<IncidentSummary, 'has_attachments'> {
   description: string
   prior_actions: string
-  asset_reference: string
+  /** Identificación del equipo. ``unspecified`` solo en incidencias anteriores. */
+  equipment_qr_status: EquipmentQrStatus | 'unspecified'
+  equipment_qr_status_label: string
+  /** Texto leído del QR. Se muestra como texto: nunca se abre como enlace. */
+  qr_code: string
   created_by: Person
   attachments: IncidentAttachment[]
   events: IncidentEvent[]
@@ -98,7 +109,13 @@ export interface NewIncident {
   supportArea: string
   description: string
   priorActions: string
-  assetReference: string
+  /** Opción principal: escanear/escribir el QR, o "No tiene QR / No aplica". */
+  equipmentMode: EquipmentMode | ''
+  /** Motivo cuando no hay un QR utilizable. */
+  noQrReason: NoQrReason | ''
+  qrCode: string
+  /** `scan` solo si el contenido lo leyó la cámara; si el usuario lo edita, `manual`. */
+  qrCaptureMethod: QrCaptureMethod
   photo: File | null
 }
 
@@ -113,7 +130,13 @@ export function createIncident(data: NewIncident): Promise<IncidentDetail> {
   form.append('support_area', data.supportArea)
   form.append('description', data.description.trim())
   if (data.priorActions.trim()) form.append('prior_actions', data.priorActions.trim())
-  if (data.assetReference.trim()) form.append('asset_reference', data.assetReference.trim())
+  const status = statusFor(data.equipmentMode, data.noQrReason)
+  form.append('equipment_qr_status', status)
+  // El contenido y la forma de captura solo se envían con un QR legible.
+  if (status === 'qr_readable') {
+    form.append('qr_code', data.qrCode.trim())
+    form.append('qr_capture_method', data.qrCaptureMethod)
+  }
   if (data.photo) form.append('photo', data.photo)
   return apiRequest<IncidentDetail>('/incidents/', { method: 'POST', body: form })
 }

@@ -37,7 +37,7 @@ En `apps.incidents`, cada capa vive en su propio archivo:
 | Área de soporte (`support_area`) | Sí | TI, Ingeniería Clínica o Mantenimiento (creadas por la migración `0002`) |
 | Descripción del problema | Sí | Entre 10 y 2000 caracteres. Lo que se observa, **sin diagnóstico técnico** |
 | Acciones previas | No | Hasta 1000 caracteres |
-| Equipo o activo (`asset_reference`) | No | Texto libre, hasta 100 caracteres. **Sin** integración con inventario ni lectura QR |
+| Identificación del equipo | Sí | **Reemplaza a "Equipo o activo" según el [ADR 0005](0005-identificacion-qr.md)**: pregunta obligatoria sobre el QR. `asset_reference` queda como campo legado, fuera de la API |
 | Fotografía | No | Una imagen JPG, PNG o WebP, hasta 5 MB |
 
 El autor (`created_by`), el código, el estado y las fechas los fija el servidor. Si el

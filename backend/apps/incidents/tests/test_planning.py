@@ -52,7 +52,14 @@ def future(days=2, hour=10):
 
 
 def _incident(user, care_unit, area, text="Incidencia ficticia de planificación"):
-    return create_incident(user=user, care_unit=care_unit, support_area=area, description=text)
+    return create_incident(
+        user=user,
+        care_unit=care_unit,
+        support_area=area,
+        description=text,
+        equipment_qr_status="qr_readable",
+        qr_code="QR-FICTICIO-PRUEBA",
+    )
 
 
 def _plan_payload(technician, **extra):

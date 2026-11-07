@@ -23,6 +23,8 @@ async function openForm() {
 async function fillValidForm(user: Awaited<ReturnType<typeof openForm>>['user']) {
   await user.selectOptions(screen.getByLabelText(/UPS o servicio/), '[DEMO] Laboratorio')
   await user.click(screen.getByRole('radio', { name: /Mantenimiento/ }))
+  await user.click(screen.getByRole('radio', { name: /Código QR/ }))
+  await user.type(screen.getByLabelText(/Contenido del código QR/), 'QR-DEMO-PUERTA')
   await user.type(
     screen.getByLabelText(/Descripción del problema/),
     'La puerta del laboratorio no cierra correctamente.',
@@ -63,7 +65,8 @@ describe('formulario de registro', () => {
     await openForm()
 
     expect(screen.getByRole('option', { name: '[DEMO] Emergencia' })).toBeInTheDocument()
-    expect(screen.getAllByRole('radio').map((radio) => radio.getAttribute('value'))).toEqual([
+    const areaRadios = screen.getAllByRole('radio').filter((radio) => radio.getAttribute('name') === 'support_area')
+    expect(areaRadios.map((radio) => radio.getAttribute('value'))).toEqual([
       'ingenieria_clinica',
       'mantenimiento',
       'ti',
@@ -85,6 +88,7 @@ describe('formulario de registro', () => {
     await user.click(screen.getByRole('button', { name: 'Registrar incidencia' }))
 
     expect(screen.getByText('Selecciona la UPS o servicio.')).toBeInTheDocument()
+    expect(screen.getByText('Indica si el equipo tiene código QR.')).toBeInTheDocument()
     expect(screen.getByText('Selecciona el área de soporte.')).toBeInTheDocument()
     expect(screen.getByText('Describe el problema.')).toBeInTheDocument()
     expect(screen.getByLabelText(/UPS o servicio/)).toHaveFocus()
@@ -140,7 +144,10 @@ describe('formulario de registro', () => {
       supportArea: 'ti',
       description: '  Descripción con espacios alrededor.  ',
       priorActions: '',
-      assetReference: 'DEMO-01',
+      equipmentMode: 'qr',
+      noQrReason: '',
+      qrCode: '  QR-DEMO-01  ',
+      qrCaptureMethod: 'scan',
       photo: photo('foto.png', 'image/png'),
     })
 
@@ -152,10 +159,15 @@ describe('formulario de registro', () => {
       'care_unit',
       'support_area',
       'description',
-      'asset_reference',
+      'equipment_qr_status',
+      'qr_code',
+      'qr_capture_method',
       'photo',
     ])
     expect(body.get('description')).toBe('Descripción con espacios alrededor.')
+    expect(body.get('qr_code')).toBe('QR-DEMO-01')
+    expect(body.get('equipment_qr_status')).toBe('qr_readable')
+    expect(body.get('qr_capture_method')).toBe('scan')
     expect((body.get('photo') as File).name).toBe('foto.png')
     expect(headers.get('Content-Type')).toBeNull() // el navegador fija el boundary multipart
     expect(headers.get('X-CSRFToken')).toBe('token-de-prueba')
@@ -166,7 +178,6 @@ describe('formulario de registro', () => {
   it('registra la incidencia con CSRF y petición activa, y muestra el código', async () => {
     const { user } = await openForm()
     await fillValidForm(user)
-    await user.type(screen.getByLabelText(/Equipo o activo/), 'DEMO-PUERTA-03')
 
     await user.click(screen.getByRole('button', { name: 'Registrar incidencia' }))
 
@@ -180,7 +191,9 @@ describe('formulario de registro', () => {
       care_unit: 'demo-laboratorio',
       support_area: 'mantenimiento',
       description: 'La puerta del laboratorio no cierra correctamente.',
-      asset_reference: 'DEMO-PUERTA-03',
+      equipment_qr_status: 'qr_readable',
+      qr_code: 'QR-DEMO-PUERTA',
+      qr_capture_method: 'manual',
     })
     expect(submission.fileName).toBeNull()
     expect(submission.csrfHeader).toBe(backend.csrfToken)
@@ -258,7 +271,9 @@ describe('mis incidencias', () => {
   it('el detalle muestra los datos registrados y el historial', async () => {
     incidentsBackend.seed(USERS.solicitante.username, {
       prior_actions: 'Se reinició el equipo.',
-      asset_reference: 'DEMO-PC-07',
+      equipment_qr_status: 'qr_readable',
+      equipment_qr_status_label: 'Tiene QR y puedo leerlo',
+      qr_code: 'DEMO-PC-07',
     })
     signInSolicitante()
     renderApp('/solicitante/incidencias/inc-2026-000001')

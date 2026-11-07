@@ -9,6 +9,13 @@ from apps.catalogs.models import CareUnit
 
 from . import planning_services, selectors
 from .attachments import prepare_evidence_image
+from .identification import (
+    PHOTO_REQUIRED,
+    QR_CODE_MAX,
+    QR_TOO_LONG,
+    clean_equipment_identification,
+    requires_photo,
+)
 from .models import (
     Incident,
     IncidentAssignment,
@@ -21,7 +28,6 @@ from .models import (
 DESCRIPTION_MIN = 10
 DESCRIPTION_MAX = 2000
 PRIOR_ACTIONS_MAX = 1000
-ASSET_REFERENCE_MAX = 100
 
 
 # --- Opciones del formulario ---------------------------------------------
@@ -40,6 +46,15 @@ class SupportAreaOptionSerializer(serializers.ModelSerializer):
 
 
 # --- Registro --------------------------------------------------------------
+
+
+class RequiredChoiceField(serializers.ChoiceField):
+    """Opción obligatoria: un valor vacío (frecuente en multipart) cuenta como ausente."""
+
+    def to_internal_value(self, data):
+        if data in ("", None):
+            self.fail("required")
+        return super().to_internal_value(data)
 
 
 class IncidentCreateSerializer(serializers.Serializer):
@@ -82,8 +97,31 @@ class IncidentCreateSerializer(serializers.Serializer):
     prior_actions = serializers.CharField(
         max_length=PRIOR_ACTIONS_MAX, required=False, allow_blank=True, default=""
     )
-    asset_reference = serializers.CharField(
-        max_length=ASSET_REFERENCE_MAX, required=False, allow_blank=True, default=""
+    equipment_qr_status = RequiredChoiceField(
+        choices=[
+            (value, label)
+            for value, label in Incident.EquipmentQrStatus.choices
+            if value in Incident.EquipmentQrStatus.public_values()
+        ],
+        error_messages={
+            "required": "Indica si el equipo tiene código QR.",
+            "null": "Indica si el equipo tiene código QR.",
+            "blank": "Indica si el equipo tiene código QR.",
+            "invalid_choice": "Selecciona una opción válida de identificación del equipo.",
+        },
+    )
+    # Sin recorte automático: la validación cruzada decide si el código corresponde.
+    qr_code = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        default="",
+        trim_whitespace=False,
+        max_length=QR_CODE_MAX + 50,  # el límite exacto se aplica tras quitar espacios
+        error_messages={"max_length": QR_TOO_LONG},
+    )
+    # Dato declarado por el cliente ("scan" si usó la cámara); ver identification.py.
+    qr_capture_method = serializers.CharField(
+        required=False, allow_blank=True, default="", max_length=10
     )
     photo = serializers.FileField(required=False, allow_null=True, write_only=True)
 
@@ -94,6 +132,22 @@ class IncidentCreateSerializer(serializers.Serializer):
                 {name: ["Este campo no está permitido."] for name in unexpected}
             )
         return super().to_internal_value(data)
+
+    def validate(self, attrs):
+        try:
+            status, qr_code, method = clean_equipment_identification(
+                attrs.get("equipment_qr_status"),
+                attrs.get("qr_code"),
+                attrs.get("qr_capture_method"),
+            )
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message_dict) from exc
+        if requires_photo(status) and not attrs.get("photo"):
+            raise serializers.ValidationError({"photo": [PHOTO_REQUIRED]})
+        attrs["equipment_qr_status"] = status
+        attrs["qr_code"] = qr_code
+        attrs["qr_capture_method"] = method
+        return attrs
 
     def validate_photo(self, photo):
         if not photo:
@@ -240,6 +294,10 @@ class AssignmentSerializer(serializers.ModelSerializer):
 
 class _IncidentDetailBase(_IncidentBaseSerializer):
     created_by = serializers.SerializerMethodField()
+    # El contenido del QR se entrega como texto; el cliente nunca debe abrirlo como URL.
+    equipment_qr_status_label = serializers.CharField(
+        source="get_equipment_qr_status_display", read_only=True
+    )
     attachments = AttachmentSerializer(many=True, read_only=True)
 
     def get_created_by(self, incident) -> dict:
@@ -254,7 +312,9 @@ DETAIL_FIELDS = (
     "support_area",
     "description",
     "prior_actions",
-    "asset_reference",
+    "equipment_qr_status",
+    "equipment_qr_status_label",
+    "qr_code",
     "created_by",
     "created_at",
     "attachments",

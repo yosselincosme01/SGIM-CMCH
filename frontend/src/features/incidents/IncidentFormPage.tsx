@@ -8,7 +8,6 @@ import { Button } from '../../shared/ui/Button'
 import { LoadingState } from '../../shared/ui/LoadingState'
 import { SelectField } from '../../shared/ui/SelectField'
 import { TextAreaField } from '../../shared/ui/TextAreaField'
-import { TextField } from '../../shared/ui/TextField'
 import {
   createIncident,
   fetchIncidentOptions,
@@ -16,10 +15,11 @@ import {
   type IncidentOptions,
   type NewIncident,
 } from './api'
+import { type EquipmentMode, requiresPhoto, statusFor } from './equipment'
+import { EquipmentIdentification } from './EquipmentIdentification'
 import { IncidentBreadcrumb } from './IncidentBreadcrumb'
 import { SUPPORT_AREA_HINTS } from './supportAreas'
 import {
-  ASSET_REFERENCE_MAX,
   DESCRIPTION_MAX,
   type IncidentFormErrors,
   PHOTO_TYPES,
@@ -35,16 +35,21 @@ const EMPTY: NewIncident = {
   supportArea: '',
   description: '',
   priorActions: '',
-  assetReference: '',
+  equipmentMode: '',
+  noQrReason: '',
+  qrCode: '',
+  qrCaptureMethod: 'manual',
   photo: null,
 }
 
 const FIELD_ORDER: (keyof IncidentFormErrors)[] = [
   'careUnit',
+  'equipmentMode',
+  'qrCode',
+  'noQrReason',
   'supportArea',
   'description',
   'priorActions',
-  'assetReference',
   'photo',
 ]
 
@@ -88,6 +93,24 @@ export function IncidentFormPage() {
   function update<K extends keyof NewIncident>(key: K, value: NewIncident[K]) {
     setForm((current) => ({ ...current, [key]: value }))
     setErrors((current) => ({ ...current, [key]: undefined }))
+  }
+
+  function selectEquipmentMode(mode: EquipmentMode) {
+    // Al cambiar de opción se descartan los datos de la otra: nunca se envían ocultos.
+    setForm((current) => ({
+      ...current,
+      equipmentMode: mode,
+      qrCode: mode === 'qr' ? current.qrCode : '',
+      qrCaptureMethod: mode === 'qr' ? current.qrCaptureMethod : 'manual',
+      noQrReason: mode === 'none' ? current.noQrReason : '',
+    }))
+    setErrors((current) => ({
+      ...current,
+      equipmentMode: undefined,
+      qrCode: undefined,
+      noQrReason: undefined,
+      photo: mode === 'qr' ? undefined : current.photo,
+    }))
   }
 
   function handlePhoto(event: ChangeEvent<HTMLInputElement>) {
@@ -212,6 +235,7 @@ export function IncidentFormPage() {
   if (!options) return <LoadingState label="Cargando formulario…" />
 
   const hasDemoUnits = options.care_units.some((unit) => unit.is_demo)
+  const photoRequired = requiresPhoto(statusFor(form.equipmentMode, form.noQrReason))
 
   return (
     <div className="stack">
@@ -257,17 +281,21 @@ export function IncidentFormPage() {
               error={errors.careUnit}
             />
           </div>
-          <div data-field="assetReference">
-            <TextField
-              label="Equipo o activo (opcional)"
-              hint="Código patrimonial, número de serie o nombre del equipo, si lo conoces."
-              value={form.assetReference}
-              maxLength={ASSET_REFERENCE_MAX}
-              onChange={(event) => update('assetReference', event.target.value)}
-              error={errors.assetReference}
-            />
-          </div>
         </fieldset>
+
+        <EquipmentIdentification
+          mode={form.equipmentMode}
+          reason={form.noQrReason}
+          qrCode={form.qrCode}
+          captureMethod={form.qrCaptureMethod}
+          errors={errors}
+          onModeChange={selectEquipmentMode}
+          onReasonChange={(reason) => update('noQrReason', reason)}
+          onQrCode={(value, method) => {
+            setForm((current) => ({ ...current, qrCode: value, qrCaptureMethod: method }))
+            setErrors((current) => ({ ...current, qrCode: undefined }))
+          }}
+        />
 
         <fieldset
           className="form-section"
@@ -333,12 +361,23 @@ export function IncidentFormPage() {
         </fieldset>
 
         <fieldset className="form-section" data-field="photo">
-          <legend className="form-section__title">Evidencia (opcional)</legend>
+          <legend className="form-section__title">
+            {photoRequired ? (
+              <>
+                Evidencia <span className="field__required" aria-hidden="true">*</span>
+              </>
+            ) : (
+              'Evidencia (opcional)'
+            )}
+          </legend>
           <div className={['field', errors.photo && 'field--invalid'].filter(Boolean).join(' ')}>
             <label className="field__label" htmlFor="incident-photo">
               Fotografía
             </label>
             <p className="field__hint" id="incident-photo-hint">
+              {photoRequired
+                ? 'Obligatoria sin un QR legible: por ejemplo, la puerta rota, la luminaria dañada o el equipo sin etiqueta. '
+                : ''}
               JPG, PNG o WebP, hasta 5 MB. No incluyas rostros ni datos de pacientes.
             </p>
             <input

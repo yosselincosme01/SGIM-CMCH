@@ -407,3 +407,178 @@
     flex: 1 1 100%;
   }
 }
+
+/* --- Identificación del equipo (QR) -------------------------------------------- */
+
+/* El contenido del QR se muestra como texto literal: monoespaciado y sin desbordes. */
+.qr-code,
+.qr-code-input {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+/* --- Identificación del equipo: dos opciones (mobile-first) ---------------------- */
+
+.equipment__options {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-3);
+}
+
+/* Desde tabletas, las dos opciones lado a lado. */
+@media (min-width: 40rem) {
+  .equipment__options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.equipment-option {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 4.5rem;
+  padding: var(--space-4);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.equipment-option:hover {
+  border-color: var(--color-primary);
+}
+
+/* El radio queda accesible para el teclado y los lectores, pero visualmente oculto. */
+.equipment-option__input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+}
+
+.equipment-option:has(.equipment-option__input:focus-visible) {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.equipment-option--selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  box-shadow: inset 0 0 0 1px var(--color-primary);
+}
+
+.equipment-option__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: var(--color-surface-muted);
+  color: var(--color-primary);
+}
+
+.equipment-option--selected .equipment-option__icon {
+  background: var(--color-primary);
+  color: var(--color-brand-on-guinda);
+}
+
+.equipment-option__text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.equipment-option__title {
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.equipment-option__subtitle {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.equipment__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  background: var(--color-surface-muted);
+  min-width: 0;
+}
+
+.equipment__reasons legend {
+  float: left;
+  width: 100%;
+  margin-bottom: var(--space-2);
+}
+
+.reason-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 3rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  cursor: pointer;
+}
+
+.reason-option input {
+  flex: none;
+  width: 1.2rem;
+  height: 1.2rem;
+  margin: 0;
+  accent-color: var(--color-primary);
+}
+
+.reason-option--selected {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+  font-weight: 600;
+}
+
+.reason-option:has(input:focus-visible) {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+/* --- Vista de escaneo -------------------------------------------------------------- */
+
+.qr-scanner {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1;
+  max-height: 60vh;
+  overflow: hidden;
+  border-radius: var(--radius-small);
+  background: #000;
+}
+
+.qr-scanner__video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.qr-scanner__frame {
+  position: absolute;
+  inset: 18%;
+  border: 3px solid rgb(255 255 255 / 0.9);
+  border-radius: var(--radius-small);
+  box-shadow: 0 0 0 100vmax rgb(0 0 0 / 0.35);
+}
+
+.qr-scanner__status {
+  margin-top: var(--space-3);
+  text-align: center;
+}

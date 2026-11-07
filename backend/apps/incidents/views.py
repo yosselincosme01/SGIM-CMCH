@@ -135,7 +135,9 @@ class IncidentListCreateView(generics.ListAPIView):
             support_area=data["support_area"],
             description=data["description"],
             prior_actions=data.get("prior_actions", ""),
-            asset_reference=data.get("asset_reference", ""),
+            equipment_qr_status=data["equipment_qr_status"],
+            qr_code=data.get("qr_code", ""),
+            qr_capture_method=data.get("qr_capture_method", ""),
             evidence=data.get("photo"),
         )
         return _detail_response(request, incident, status.HTTP_201_CREATED)

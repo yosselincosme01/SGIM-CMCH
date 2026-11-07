@@ -23,9 +23,18 @@ export function IncidentSummaryCard({ incident }: { incident: IncidentDetail }) 
           <dd>{incident.support_area.name}</dd>
         </div>
         <div>
-          <dt>Equipo o activo</dt>
-          <dd>{incident.asset_reference || 'No indicado'}</dd>
+          <dt>Identificación del equipo</dt>
+          <dd>{incident.equipment_qr_status_label}</dd>
         </div>
+        {incident.qr_code && (
+          <div className="detail-grid__wide">
+            <dt>Contenido del QR</dt>
+            {/* Siempre como texto: aunque sea una URL, no se convierte en enlace ni se abre. */}
+            <dd className="qr-code" data-testid="qr-code">
+              {incident.qr_code}
+            </dd>
+          </div>
+        )}
         <div>
           <dt>Registrada por</dt>
           <dd>{incident.created_by.full_name}</dd>

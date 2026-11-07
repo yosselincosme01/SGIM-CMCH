@@ -25,7 +25,7 @@ def _create(user, care_unit, area, **extra):
         care_unit=care_unit,
         support_area=area,
         description="Descripción ficticia de prueba suficientemente larga.",
-        **extra,
+        **{"equipment_qr_status": "qr_readable", "qr_code": "QR-FICTICIO-PRUEBA", **extra},
     )
 
 
@@ -84,7 +84,9 @@ def test_format_incident_code():
 
 
 def test_create_incident_sets_code_author_status_and_event(solicitante, care_unit, area_ti):
-    incident = _create(solicitante, care_unit, area_ti, asset_reference="DEMO-01")
+    incident = _create(
+        solicitante, care_unit, area_ti, equipment_qr_status="qr_readable", qr_code="DEMO-01"
+    )
 
     assert CODE_PATTERN.match(incident.code)
     assert incident.created_by == solicitante
