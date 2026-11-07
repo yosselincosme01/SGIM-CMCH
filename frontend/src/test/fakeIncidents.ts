@@ -25,11 +25,15 @@ const ALLOWED_FIELDS = new Set([
   'prior_actions',
   'equipment_qr_status',
   'qr_code',
+  'qr_capture_method',
   'photo',
 ])
 
 /** Reglas de identificación del backend (ADR 0005), simplificadas para las pruebas. */
-function identificationErrors(fields: Record<string, string>): Record<string, string[]> | null {
+function identificationErrors(
+  fields: Record<string, string>,
+  hasPhoto: boolean,
+): Record<string, string[]> | null {
   const unexpected = Object.keys(fields).filter((key) => !ALLOWED_FIELDS.has(key))
   if (unexpected.length) {
     return Object.fromEntries(unexpected.map((key) => [key, ['Este campo no está permitido.']]))
@@ -40,6 +44,18 @@ function identificationErrors(fields: Record<string, string>): Record<string, st
   if (status === 'qr_readable' && !code) return { qr_code: ['Escribe el contenido del código QR.'] }
   if (status !== 'qr_readable' && code) {
     return { qr_code: ['No corresponde registrar un código QR con la opción seleccionada.'] }
+  }
+  const method = fields.qr_capture_method ?? ''
+  if (status !== 'qr_readable' && method) {
+    return { qr_capture_method: ['La forma de captura solo corresponde a un QR legible.'] }
+  }
+  if (method && !['manual', 'scan'].includes(method)) {
+    return { qr_capture_method: ['La forma de captura del QR no es válida.'] }
+  }
+  if (status !== 'qr_readable' && !hasPhoto) {
+    return {
+      photo: ['Adjunta una fotografía de la incidencia: es obligatoria cuando no hay un QR legible.'],
+    }
   }
   return null
 }
@@ -159,7 +175,7 @@ export const incidentHandlers = [
     if (incidentsBackend.serverErrors) {
       return HttpResponse.json(incidentsBackend.serverErrors, { status: 400 })
     }
-    const invalid = identificationErrors(fields)
+    const invalid = identificationErrors(fields, fileName !== null)
     if (invalid) return HttpResponse.json(invalid, { status: 400 })
     const qrStatus = fields.equipment_qr_status as IncidentDetail['equipment_qr_status']
     const incident = incidentsBackend.seed(user.username, {

@@ -1,6 +1,12 @@
 /** Endpoints de incidencias (backend/apps/incidents). */
 import { apiRequest } from '../../shared/api/client'
-import type { EquipmentQrStatus } from './equipment'
+import {
+  type EquipmentMode,
+  type EquipmentQrStatus,
+  type NoQrReason,
+  type QrCaptureMethod,
+  statusFor,
+} from './equipment'
 
 export interface CareUnitOption {
   code: string
@@ -103,8 +109,13 @@ export interface NewIncident {
   supportArea: string
   description: string
   priorActions: string
-  equipmentQrStatus: EquipmentQrStatus | ''
+  /** Opción principal: escanear/escribir el QR, o "No tiene QR / No aplica". */
+  equipmentMode: EquipmentMode | ''
+  /** Motivo cuando no hay un QR utilizable. */
+  noQrReason: NoQrReason | ''
   qrCode: string
+  /** `scan` solo si el contenido lo leyó la cámara; si el usuario lo edita, `manual`. */
+  qrCaptureMethod: QrCaptureMethod
   photo: File | null
 }
 
@@ -119,9 +130,13 @@ export function createIncident(data: NewIncident): Promise<IncidentDetail> {
   form.append('support_area', data.supportArea)
   form.append('description', data.description.trim())
   if (data.priorActions.trim()) form.append('prior_actions', data.priorActions.trim())
-  form.append('equipment_qr_status', data.equipmentQrStatus)
-  // El contenido solo se envía con un QR legible; la forma de captura la fija el servidor.
-  if (data.equipmentQrStatus === 'qr_readable') form.append('qr_code', data.qrCode.trim())
+  const status = statusFor(data.equipmentMode, data.noQrReason)
+  form.append('equipment_qr_status', status)
+  // El contenido y la forma de captura solo se envían con un QR legible.
+  if (status === 'qr_readable') {
+    form.append('qr_code', data.qrCode.trim())
+    form.append('qr_capture_method', data.qrCaptureMethod)
+  }
   if (data.photo) form.append('photo', data.photo)
   return apiRequest<IncidentDetail>('/incidents/', { method: 'POST', body: form })
 }

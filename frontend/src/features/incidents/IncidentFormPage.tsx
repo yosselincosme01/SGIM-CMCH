@@ -15,9 +15,9 @@ import {
   type IncidentOptions,
   type NewIncident,
 } from './api'
-import { EQUIPMENT_QR_OPTIONS, type EquipmentQrStatus } from './equipment'
+import { type EquipmentMode, requiresPhoto, statusFor } from './equipment'
+import { EquipmentIdentification } from './EquipmentIdentification'
 import { IncidentBreadcrumb } from './IncidentBreadcrumb'
-import { QrCodeInput } from './QrCodeInput'
 import { SUPPORT_AREA_HINTS } from './supportAreas'
 import {
   DESCRIPTION_MAX,
@@ -35,15 +35,18 @@ const EMPTY: NewIncident = {
   supportArea: '',
   description: '',
   priorActions: '',
-  equipmentQrStatus: '',
+  equipmentMode: '',
+  noQrReason: '',
   qrCode: '',
+  qrCaptureMethod: 'manual',
   photo: null,
 }
 
 const FIELD_ORDER: (keyof IncidentFormErrors)[] = [
   'careUnit',
-  'equipmentQrStatus',
+  'equipmentMode',
   'qrCode',
+  'noQrReason',
   'supportArea',
   'description',
   'priorActions',
@@ -92,14 +95,22 @@ export function IncidentFormPage() {
     setErrors((current) => ({ ...current, [key]: undefined }))
   }
 
-  function selectEquipment(status: EquipmentQrStatus) {
-    // Al cambiar de opción se descarta el código: nunca se envían datos ocultos.
+  function selectEquipmentMode(mode: EquipmentMode) {
+    // Al cambiar de opción se descartan los datos de la otra: nunca se envían ocultos.
     setForm((current) => ({
       ...current,
-      equipmentQrStatus: status,
-      qrCode: status === 'qr_readable' ? current.qrCode : '',
+      equipmentMode: mode,
+      qrCode: mode === 'qr' ? current.qrCode : '',
+      qrCaptureMethod: mode === 'qr' ? current.qrCaptureMethod : 'manual',
+      noQrReason: mode === 'none' ? current.noQrReason : '',
     }))
-    setErrors((current) => ({ ...current, equipmentQrStatus: undefined, qrCode: undefined }))
+    setErrors((current) => ({
+      ...current,
+      equipmentMode: undefined,
+      qrCode: undefined,
+      noQrReason: undefined,
+      photo: mode === 'qr' ? undefined : current.photo,
+    }))
   }
 
   function handlePhoto(event: ChangeEvent<HTMLInputElement>) {
@@ -224,6 +235,7 @@ export function IncidentFormPage() {
   if (!options) return <LoadingState label="Cargando formulario…" />
 
   const hasDemoUnits = options.care_units.some((unit) => unit.is_demo)
+  const photoRequired = requiresPhoto(statusFor(form.equipmentMode, form.noQrReason))
 
   return (
     <div className="stack">
@@ -271,56 +283,19 @@ export function IncidentFormPage() {
           </div>
         </fieldset>
 
-        <fieldset
-          className="form-section"
-          data-field="equipmentQrStatus"
-          aria-describedby={errors.equipmentQrStatus ? 'equipment-error' : undefined}
-          aria-invalid={errors.equipmentQrStatus ? true : undefined}
-        >
-          <legend className="form-section__title">
-            Identificación del equipo <span className="field__required" aria-hidden="true">*</span>
-          </legend>
-          <p className="field__label" id="equipment-question">
-            ¿El equipo tiene código QR?
-          </p>
-          <div
-            className="choice-grid"
-            role="radiogroup"
-            aria-required="true"
-            aria-labelledby="equipment-question"
-          >
-            {EQUIPMENT_QR_OPTIONS.map((option) => (
-              <label
-                key={option.value}
-                className={`choice ${form.equipmentQrStatus === option.value ? 'choice--selected' : ''}`}
-              >
-                <input
-                  type="radio"
-                  name="equipment_qr_status"
-                  value={option.value}
-                  checked={form.equipmentQrStatus === option.value}
-                  onChange={() => selectEquipment(option.value)}
-                />
-                <span className="choice__title">{option.label}</span>
-                <span className="choice__hint">{option.hint}</span>
-              </label>
-            ))}
-          </div>
-          {errors.equipmentQrStatus && (
-            <p id="equipment-error" className="field__error">
-              {errors.equipmentQrStatus}
-            </p>
-          )}
-          {form.equipmentQrStatus === 'qr_readable' && (
-            <div data-field="qrCode">
-              <QrCodeInput
-                value={form.qrCode}
-                onCode={(value) => update('qrCode', value)}
-                error={errors.qrCode}
-              />
-            </div>
-          )}
-        </fieldset>
+        <EquipmentIdentification
+          mode={form.equipmentMode}
+          reason={form.noQrReason}
+          qrCode={form.qrCode}
+          captureMethod={form.qrCaptureMethod}
+          errors={errors}
+          onModeChange={selectEquipmentMode}
+          onReasonChange={(reason) => update('noQrReason', reason)}
+          onQrCode={(value, method) => {
+            setForm((current) => ({ ...current, qrCode: value, qrCaptureMethod: method }))
+            setErrors((current) => ({ ...current, qrCode: undefined }))
+          }}
+        />
 
         <fieldset
           className="form-section"
@@ -386,12 +361,23 @@ export function IncidentFormPage() {
         </fieldset>
 
         <fieldset className="form-section" data-field="photo">
-          <legend className="form-section__title">Evidencia (opcional)</legend>
+          <legend className="form-section__title">
+            {photoRequired ? (
+              <>
+                Evidencia <span className="field__required" aria-hidden="true">*</span>
+              </>
+            ) : (
+              'Evidencia (opcional)'
+            )}
+          </legend>
           <div className={['field', errors.photo && 'field--invalid'].filter(Boolean).join(' ')}>
             <label className="field__label" htmlFor="incident-photo">
               Fotografía
             </label>
             <p className="field__hint" id="incident-photo-hint">
+              {photoRequired
+                ? 'Obligatoria sin un QR legible: por ejemplo, la puerta rota, la luminaria dañada o el equipo sin etiqueta. '
+                : ''}
               JPG, PNG o WebP, hasta 5 MB. No incluyas rostros ni datos de pacientes.
             </p>
             <input

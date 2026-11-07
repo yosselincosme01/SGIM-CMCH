@@ -3,7 +3,7 @@
  * La validación definitiva —incluido el contenido real de la imagen— la hace el backend.
  */
 import type { NewIncident } from './api'
-import { validateEquipment } from './equipment'
+import { MESSAGES, requiresPhoto, statusFor, validateEquipment } from './equipment'
 
 export const DESCRIPTION_MIN = 10
 export const DESCRIPTION_MAX = 2000
@@ -14,7 +14,8 @@ export const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
 export type IncidentFormErrors = Partial<
   Record<
     | 'careUnit'
-    | 'equipmentQrStatus'
+    | 'equipmentMode'
+    | 'noQrReason'
     | 'qrCode'
     | 'supportArea'
     | 'description'
@@ -48,9 +49,12 @@ export function validateIncident(data: NewIncident): IncidentFormErrors {
   if (data.priorActions.trim().length > PRIOR_ACTIONS_MAX) {
     errors.priorActions = `No puede superar ${PRIOR_ACTIONS_MAX} caracteres.`
   }
-  Object.assign(errors, validateEquipment(data.equipmentQrStatus, data.qrCode))
+  Object.assign(errors, validateEquipment(data.equipmentMode, data.noQrReason, data.qrCode))
   const photoError = validatePhoto(data.photo)
   if (photoError) errors.photo = photoError
+  else if (!data.photo && requiresPhoto(statusFor(data.equipmentMode, data.noQrReason))) {
+    errors.photo = MESSAGES.photoRequired
+  }
   return errors
 }
 
@@ -60,8 +64,9 @@ export const SERVER_FIELD_MAP: Record<string, keyof IncidentFormErrors> = {
   support_area: 'supportArea',
   description: 'description',
   prior_actions: 'priorActions',
-  equipment_qr_status: 'equipmentQrStatus',
+  equipment_qr_status: 'noQrReason',
   qr_code: 'qrCode',
+  qr_capture_method: 'qrCode',
   photo: 'photo',
 }
 

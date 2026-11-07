@@ -23,7 +23,8 @@ async function openForm() {
 async function fillValidForm(user: Awaited<ReturnType<typeof openForm>>['user']) {
   await user.selectOptions(screen.getByLabelText(/UPS o servicio/), '[DEMO] Laboratorio')
   await user.click(screen.getByRole('radio', { name: /Mantenimiento/ }))
-  await user.click(screen.getByRole('radio', { name: /No corresponde a un equipo/ }))
+  await user.click(screen.getByRole('radio', { name: /Código QR/ }))
+  await user.type(screen.getByLabelText(/Contenido del código QR/), 'QR-DEMO-PUERTA')
   await user.type(
     screen.getByLabelText(/Descripción del problema/),
     'La puerta del laboratorio no cierra correctamente.',
@@ -143,8 +144,10 @@ describe('formulario de registro', () => {
       supportArea: 'ti',
       description: '  Descripción con espacios alrededor.  ',
       priorActions: '',
-      equipmentQrStatus: 'qr_readable',
+      equipmentMode: 'qr',
+      noQrReason: '',
       qrCode: '  QR-DEMO-01  ',
+      qrCaptureMethod: 'scan',
       photo: photo('foto.png', 'image/png'),
     })
 
@@ -158,11 +161,13 @@ describe('formulario de registro', () => {
       'description',
       'equipment_qr_status',
       'qr_code',
+      'qr_capture_method',
       'photo',
     ])
     expect(body.get('description')).toBe('Descripción con espacios alrededor.')
     expect(body.get('qr_code')).toBe('QR-DEMO-01')
-    expect(body.has('qr_capture_method')).toBe(false) // lo fija el servidor
+    expect(body.get('equipment_qr_status')).toBe('qr_readable')
+    expect(body.get('qr_capture_method')).toBe('scan')
     expect((body.get('photo') as File).name).toBe('foto.png')
     expect(headers.get('Content-Type')).toBeNull() // el navegador fija el boundary multipart
     expect(headers.get('X-CSRFToken')).toBe('token-de-prueba')
@@ -186,7 +191,9 @@ describe('formulario de registro', () => {
       care_unit: 'demo-laboratorio',
       support_area: 'mantenimiento',
       description: 'La puerta del laboratorio no cierra correctamente.',
-      equipment_qr_status: 'not_equipment',
+      equipment_qr_status: 'qr_readable',
+      qr_code: 'QR-DEMO-PUERTA',
+      qr_capture_method: 'manual',
     })
     expect(submission.fileName).toBeNull()
     expect(submission.csrfHeader).toBe(backend.csrfToken)

@@ -1,23 +1,23 @@
-import { useId } from 'react'
+import { forwardRef, useId } from 'react'
 
-import { QR_CODE_MAX, type QrCaptureMethod } from './equipment'
+import { QR_CODE_MAX } from './equipment'
 
 interface QrCodeInputProps {
   value: string
-  /**
-   * Recibe el contenido y cómo se obtuvo. Hoy siempre es ``manual``. Un futuro
-   * lector con cámara se conectará aquí llamando ``onCode(texto, 'scan')``, sin
-   * cambiar el formulario. No se muestra ningún botón de escaneo hasta que exista.
-   */
-  onCode: (value: string, method: QrCaptureMethod) => void
+  /** Texto escrito por el usuario (forma de captura `manual`). */
+  onChange: (value: string) => void
+  hint: string
   error?: string
 }
 
 /**
- * Campo para el contenido del QR. El texto se trata siempre como dato: no se
- * interpreta ni se abre, aunque contenga una URL.
+ * Campo del contenido del QR. Recibe tanto lo escrito como lo leído con la cámara.
+ * El texto se trata siempre como dato: no se interpreta ni se abre, aunque sea una URL.
  */
-export function QrCodeInput({ value, onCode, error }: QrCodeInputProps) {
+export const QrCodeInput = forwardRef<HTMLInputElement, QrCodeInputProps>(function QrCodeInput(
+  { value, onChange, hint, error },
+  ref,
+) {
   const id = useId()
   const hintId = `${id}-hint`
   const errorId = `${id}-error`
@@ -32,9 +32,10 @@ export function QrCodeInput({ value, onCode, error }: QrCodeInputProps) {
         </span>
       </label>
       <p id={hintId} className="field__hint">
-        Escríbelo tal como aparece en la etiqueta del equipo.
+        {hint}
       </p>
       <input
+        ref={ref}
         id={id}
         className="field__input qr-code-input"
         type="text"
@@ -48,7 +49,7 @@ export function QrCodeInput({ value, onCode, error }: QrCodeInputProps) {
         spellCheck={false}
         aria-invalid={error ? true : undefined}
         aria-describedby={error ? `${hintId} ${errorId}` : hintId}
-        onChange={(event) => onCode(event.target.value, 'manual')}
+        onChange={(event) => onChange(event.target.value)}
       />
       {error && (
         <p id={errorId} className="field__error">
@@ -57,4 +58,4 @@ export function QrCodeInput({ value, onCode, error }: QrCodeInputProps) {
       )}
     </div>
   )
-}
+})

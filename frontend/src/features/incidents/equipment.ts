@@ -2,59 +2,69 @@
  * Identificación del equipo mediante QR (ADR 0005). Solo orienta al usuario: el
  * backend y PostgreSQL vuelven a exigir las mismas reglas.
  *
- * - No se asume ningún formato de QR ni se interpreta su contenido.
- * - El contenido nunca se abre como enlace, aunque sea una URL.
+ * La interfaz presenta dos opciones principales:
+ * - "Escanear QR" (o escribirlo): estado `qr_readable`, con contenido obligatorio.
+ * - "No tiene QR / No aplica": se elige el motivo (`qr_unreadable`, `no_qr` o
+ *   `not_equipment`) y la fotografía pasa a ser obligatoria.
+ *
+ * No se asume ningún formato de QR ni se interpreta su contenido, y nunca se abre
+ * como enlace, aunque sea una URL.
  */
 export type EquipmentQrStatus = 'qr_readable' | 'qr_unreadable' | 'no_qr' | 'not_equipment'
+export type NoQrReason = Exclude<EquipmentQrStatus, 'qr_readable'>
+export type EquipmentMode = 'qr' | 'none'
 
-/** Forma de captura. Hoy solo existe la manual; la cámara llegará más adelante. */
+/** Forma de captura declarada: `scan` solo cuando el texto lo leyó la cámara. */
 export type QrCaptureMethod = 'manual' | 'scan'
 
 export const QR_CODE_MAX = 255
 
-export const EQUIPMENT_QR_OPTIONS: readonly {
-  value: EquipmentQrStatus
-  label: string
-  hint: string
-}[] = [
-  {
-    value: 'qr_readable',
-    label: 'Tiene QR y puedo leerlo',
-    hint: 'Escribirás el contenido que aparece en la etiqueta.',
-  },
-  {
-    value: 'qr_unreadable',
-    label: 'Tiene QR, pero no puedo leerlo',
-    hint: 'Por ejemplo, si la etiqueta está deteriorada o borrosa.',
-  },
-  {
-    value: 'no_qr',
-    label: 'El equipo no tiene QR',
-    hint: 'El equipo no tiene ninguna etiqueta QR.',
-  },
-  {
-    value: 'not_equipment',
-    label: 'No corresponde a un equipo',
-    hint: 'Infraestructura o instalaciones: puertas, iluminación, agua, mobiliario.',
-  },
+export const NO_QR_REASONS: readonly { value: NoQrReason; label: string }[] = [
+  { value: 'qr_unreadable', label: 'Tiene QR, pero no puedo leerlo' },
+  { value: 'no_qr', label: 'El equipo no tiene QR' },
+  { value: 'not_equipment', label: 'No corresponde a un equipo' },
 ]
+
+export const MESSAGES = {
+  modeRequired: 'Indica si el equipo tiene código QR.',
+  reasonRequired: 'Selecciona el motivo.',
+  qrRequired: 'Escribe o escanea el contenido del código QR.',
+  qrTooLong: `El contenido del QR no puede superar ${QR_CODE_MAX} caracteres.`,
+  qrInvalid: 'El contenido del QR tiene caracteres no permitidos (saltos de línea o de control).',
+  photoRequired:
+    'Adjunta una fotografía de la incidencia: es obligatoria cuando no hay un QR legible.',
+} as const
+
+export function statusFor(mode: EquipmentMode | '', reason: NoQrReason | ''): EquipmentQrStatus | '' {
+  if (mode === 'qr') return 'qr_readable'
+  if (mode === 'none') return reason
+  return ''
+}
+
+export function requiresPhoto(status: EquipmentQrStatus | ''): boolean {
+  return status !== '' && status !== 'qr_readable'
+}
 
 // Caracteres de control (saltos de línea, tabulaciones) o de formato invisibles.
 const FORBIDDEN = /[\p{Cc}\p{Cf}]/u
 
-export function validateEquipment(status: string, qrCode: string) {
-  const errors: { equipmentQrStatus?: string; qrCode?: string } = {}
-  if (!EQUIPMENT_QR_OPTIONS.some((option) => option.value === status)) {
-    errors.equipmentQrStatus = 'Indica si el equipo tiene código QR.'
-    return errors
-  }
-  if (status !== 'qr_readable') return errors
+export function validateQrCode(qrCode: string): string | undefined {
   const code = qrCode.trim()
-  if (!code) errors.qrCode = 'Escribe el contenido del código QR.'
-  else if (code.length > QR_CODE_MAX)
-    errors.qrCode = `El contenido del QR no puede superar ${QR_CODE_MAX} caracteres.`
-  else if (FORBIDDEN.test(code))
-    errors.qrCode =
-      'El contenido del QR tiene caracteres no permitidos (saltos de línea o de control).'
-  return errors
+  if (!code) return MESSAGES.qrRequired
+  if (code.length > QR_CODE_MAX) return MESSAGES.qrTooLong
+  if (FORBIDDEN.test(code)) return MESSAGES.qrInvalid
+  return undefined
+}
+
+export function validateEquipment(
+  mode: EquipmentMode | '',
+  reason: NoQrReason | '',
+  qrCode: string,
+): { equipmentMode?: string; noQrReason?: string; qrCode?: string } {
+  if (mode === 'qr') {
+    const error = validateQrCode(qrCode)
+    return error ? { qrCode: error } : {}
+  }
+  if (mode === 'none') return reason ? {} : { noQrReason: MESSAGES.reasonRequired }
+  return { equipmentMode: MESSAGES.modeRequired }
 }
