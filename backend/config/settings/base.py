@@ -140,6 +140,10 @@ TIME_ZONE = env("DJANGO_TIME_ZONE", "UTC")
 USE_I18N = True
 USE_TZ = True
 
+# Zona horaria de presentación e interpretación de fechas programadas. Es fija y no
+# depende de TIME_ZONE ni de la configuración del sistema operativo.
+SGIM_DISPLAY_TIME_ZONE = "America/Lima"
+
 
 # --- Archivos estáticos y subidos ------------------------------------------
 

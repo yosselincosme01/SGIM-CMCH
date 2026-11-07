@@ -1,29 +1,84 @@
+from datetime import date, datetime, time, timedelta
+
+from django.contrib.auth import get_user_model
+from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db.models import F, Min, Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
-from rest_framework import generics, status
-from rest_framework.exceptions import PermissionDenied
+from django.utils import timezone
+from rest_framework import generics, serializers, status
+from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import IsSolicitante
+from apps.accounts.permissions import IsPlanificador, IsSolicitante
 from apps.catalogs.models import CareUnit
 
-from . import selectors, services
-from .models import SupportArea
+from . import planning_services, selectors, services
+from .models import Incident, PriorityLevel, SupportArea
 from .serializers import (
     CareUnitOptionSerializer,
     IncidentCreateSerializer,
     IncidentDetailSerializer,
     IncidentListSerializer,
+    PlanningInputSerializer,
+    PlanningListSerializer,
+    PriorityInputSerializer,
+    PriorityLevelSerializer,
+    RequesterIncidentDetailSerializer,
     SupportAreaOptionSerializer,
+    TechnicianSerializer,
+    display_time_zone,
 )
 
 
 def _normalize_code(code: str) -> str:
     return code.strip().upper()
+
+
+class Conflict(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_detail = "La incidencia cambió mientras la planificabas."
+    default_code = "conflict"
+
+
+def _detail_queryset(user):
+    return selectors.visible_incidents(user).prefetch_related(
+        "attachments",
+        "events__actor",
+        "events__incident__support_area",
+        selectors.current_assignment_prefetch(),
+    )
+
+
+def _detail_response(request: Request, incident: Incident, http_status=status.HTTP_200_OK):
+    """
+    Serializa el detalle según quién consulta: el personal del área ve los datos de
+    planificación; el solicitante, solo el estado y la fecha estimada.
+    """
+    incident = _detail_queryset(request.user).get(pk=incident.pk)
+    if selectors.can_view_as_staff(request.user, incident):
+        serializer = IncidentDetailSerializer(incident, context={"request": request})
+    else:
+        serializer = RequesterIncidentDetailSerializer(incident, context={"request": request})
+    return Response(serializer.data, status=http_status)
+
+
+def _visible_incident_or_404(request: Request, code: str) -> Incident:
+    return get_object_or_404(selectors.visible_incidents(request.user), code=_normalize_code(code))
+
+
+def _to_drf_validation(exc: DjangoValidationError) -> serializers.ValidationError:
+    if hasattr(exc, "message_dict"):
+        return serializers.ValidationError(exc.message_dict)
+    return serializers.ValidationError({"non_field_errors": exc.messages})
+
+
+# --- Registro y consulta ---------------------------------------------------------
 
 
 class IncidentOptionsView(APIView):
@@ -47,7 +102,8 @@ class IncidentOptionsView(APIView):
 class IncidentListCreateView(generics.ListAPIView):
     """
     GET  /incidents/?scope=mine   Incidencias registradas por el usuario (por defecto).
-    GET  /incidents/?scope=area   Incidencias de las áreas de soporte del usuario.
+    GET  /incidents/?scope=area   Incidencias de las áreas donde el usuario tiene una
+                                  función autorizada (Planificador o técnico).
     POST /incidents/              Registro (multipart; solo rol solicitante).
     """
 
@@ -65,7 +121,7 @@ class IncidentListCreateView(generics.ListAPIView):
             return selectors.own_incidents(self.request.user)
         if scope == "area":
             if not selectors.can_view_area_inbox(self.request.user):
-                raise PermissionDenied("Tu rol no permite consultar las incidencias de un área.")
+                raise PermissionDenied("No tienes una función autorizada en ningún área.")
             return selectors.area_incidents(self.request.user)
         raise PermissionDenied("Ámbito de consulta no válido.")
 
@@ -82,31 +138,21 @@ class IncidentListCreateView(generics.ListAPIView):
             asset_reference=data.get("asset_reference", ""),
             evidence=data.get("photo"),
         )
-        incident = (
-            selectors.base_queryset().prefetch_related("attachments", "events").get(pk=incident.pk)
-        )
-        return Response(IncidentDetailSerializer(incident).data, status=status.HTTP_201_CREATED)
+        return _detail_response(request, incident, status.HTTP_201_CREATED)
 
 
-class IncidentDetailView(generics.RetrieveAPIView):
+class IncidentDetailView(APIView):
     """Detalle de una incidencia visible para el usuario. Si no lo es, responde 404."""
 
-    serializer_class = IncidentDetailSerializer
-
-    def get_object(self):
-        queryset = selectors.visible_incidents(self.request.user).prefetch_related(
-            "attachments", "events__actor"
-        )
-        return get_object_or_404(queryset, code=_normalize_code(self.kwargs["code"]))
+    def get(self, request: Request, code: str) -> Response:
+        return _detail_response(request, _visible_incident_or_404(request, code))
 
 
 class IncidentAttachmentView(APIView):
     """Descarga protegida de una evidencia: solo si el usuario puede ver la incidencia."""
 
     def get(self, request: Request, code: str, pk: int):
-        incident = get_object_or_404(
-            selectors.visible_incidents(request.user), code=_normalize_code(code)
-        )
+        incident = _visible_incident_or_404(request, code)
         attachment = get_object_or_404(incident.attachments, pk=pk)
         try:
             handle = attachment.file.open("rb")
@@ -117,3 +163,182 @@ class IncidentAttachmentView(APIView):
         response["Cache-Control"] = "private, no-store"
         response["Content-Security-Policy"] = "default-src 'none'; sandbox"
         return response
+
+
+# --- Planificación -----------------------------------------------------------------
+
+
+def _lima_day_range(day: date) -> tuple[datetime, datetime]:
+    zone = display_time_zone()
+    start = datetime.combine(day, time.min, tzinfo=zone)
+    return start, start + timedelta(days=1)
+
+
+class PlanningOptionsView(APIView):
+    """Áreas que el usuario planifica, niveles de prioridad provisionales y contadores."""
+
+    permission_classes = [IsAuthenticated, IsPlanificador]
+
+    def get(self, request: Request) -> Response:
+        areas = selectors.planning_areas(request.user).order_by("name")
+        inbox = selectors.planning_incidents(request.user)
+        today = timezone.localtime(timezone=display_time_zone()).date()
+        today_start, today_end = _lima_day_range(today)
+        open_inbox = inbox.filter(status__in=selectors.PLANNABLE_STATUSES)
+        return Response(
+            {
+                "areas": SupportAreaOptionSerializer(areas, many=True).data,
+                "priorities": PriorityLevelSerializer(
+                    PriorityLevel.objects.filter(is_active=True), many=True
+                ).data,
+                "counts": {
+                    "unprioritized": open_inbox.filter(priority__isnull=True).count(),
+                    "unassigned": open_inbox.filter(status=Incident.Status.REGISTRADA).count(),
+                    "scheduled_today": inbox.filter(
+                        assignments__is_current=True,
+                        assignments__scheduled_at__gte=today_start,
+                        assignments__scheduled_at__lt=today_end,
+                    ).count(),
+                },
+            }
+        )
+
+
+class PlanningListView(generics.ListAPIView):
+    """
+    Bandeja del Planificador: solo incidencias de sus áreas autorizadas.
+
+    Filtros: ``area``, ``status``, ``priority`` (``none`` = sin prioridad),
+    ``technician``, ``scheduled_on`` (AAAA-MM-DD, hora de Lima) y ``q`` (código o
+    descripción). Orden (``ordering``): ``priority``, ``created_at``, ``-created_at``
+    (por defecto) o ``scheduled_at``.
+    """
+
+    serializer_class = PlanningListSerializer
+    permission_classes = [IsAuthenticated, IsPlanificador]
+
+    ORDERINGS = {
+        "-created_at": ("-created_at", "-id"),
+        "created_at": ("created_at", "id"),
+        "priority": (F("priority__order").asc(nulls_first=True), "-created_at", "-id"),
+        "scheduled_at": (F("current_scheduled_at").asc(nulls_last=True), "-created_at", "-id"),
+    }
+
+    def get_queryset(self):
+        params = self.request.query_params
+        queryset = selectors.planning_incidents(self.request.user)
+
+        if area := params.get("area"):
+            queryset = queryset.filter(support_area__code=area)
+        if state := params.get("status"):
+            if state not in Incident.Status.values:
+                raise serializers.ValidationError({"status": "Estado no válido."})
+            queryset = queryset.filter(status=state)
+        if priority := params.get("priority"):
+            if priority == "none":
+                queryset = queryset.filter(priority__isnull=True)
+            else:
+                queryset = queryset.filter(priority__code=priority)
+        if technician := params.get("technician"):
+            queryset = queryset.filter(
+                assignments__is_current=True, assignments__technician__username=technician
+            )
+        if scheduled_on := params.get("scheduled_on"):
+            try:
+                day = date.fromisoformat(scheduled_on)
+            except ValueError as exc:
+                raise serializers.ValidationError({"scheduled_on": "Fecha no válida."}) from exc
+            start, end = _lima_day_range(day)
+            queryset = queryset.filter(
+                assignments__is_current=True,
+                assignments__scheduled_at__gte=start,
+                assignments__scheduled_at__lt=end,
+            )
+        if text := params.get("q", "").strip()[:100]:
+            queryset = queryset.filter(Q(code__icontains=text) | Q(description__icontains=text))
+
+        ordering = params.get("ordering", "-created_at")
+        if ordering not in self.ORDERINGS:
+            raise serializers.ValidationError({"ordering": "Orden no válido."})
+        if ordering == "scheduled_at":
+            queryset = queryset.annotate(
+                current_scheduled_at=Min(
+                    "assignments__scheduled_at", filter=Q(assignments__is_current=True)
+                )
+            )
+        return queryset.order_by(*self.ORDERINGS[ordering])
+
+
+class _PlanningActionView(APIView):
+    """Base de las acciones de planificación. El servicio vuelve a validar todo."""
+
+    permission_classes = [IsAuthenticated, IsPlanificador]
+
+    def get_incident(self, request: Request, code: str) -> Incident:
+        incident = _visible_incident_or_404(request, code)
+        if not selectors.can_plan_area(request.user, incident.support_area):
+            raise PermissionDenied(planning_services.NOT_PLANNER)
+        return incident
+
+    def run(self, action, **kwargs):
+        try:
+            return action(**kwargs)
+        except planning_services.PlanningConflict as exc:
+            raise Conflict(str(exc)) from exc
+        except DjangoPermissionDenied as exc:
+            raise PermissionDenied(str(exc)) from exc
+        except DjangoValidationError as exc:
+            raise _to_drf_validation(exc) from exc
+
+
+class IncidentTechniciansView(_PlanningActionView):
+    """Técnicos autorizados del área de la incidencia, con su carga vigente."""
+
+    def get(self, request: Request, code: str) -> Response:
+        incident = self.get_incident(request, code)
+        technicians = selectors.assignable_technicians(incident.support_area)
+        return Response({"results": TechnicianSerializer(technicians, many=True).data})
+
+
+class IncidentPriorityView(_PlanningActionView):
+    """Establece o cambia la prioridad, antes o después de programar la atención."""
+
+    def put(self, request: Request, code: str) -> Response:
+        incident = self.get_incident(request, code)
+        serializer = PriorityInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        self.run(
+            planning_services.set_priority,
+            incident=incident,
+            actor=request.user,
+            priority=serializer.validated_data["priority"],
+            reason=serializer.validated_data["reason"],
+        )
+        return _detail_response(request, incident)
+
+
+class IncidentPlanningView(_PlanningActionView):
+    """Programa la atención, o la reprograma o reasigna (con motivo obligatorio)."""
+
+    def post(self, request: Request, code: str) -> Response:
+        incident = self.get_incident(request, code)
+        serializer = PlanningInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        technician = (
+            get_user_model()
+            .objects.filter(username__iexact=data["technician"], is_active=True)
+            .first()
+        )
+        self.run(
+            planning_services.schedule_attention,
+            incident=incident,
+            actor=request.user,
+            priority=data["priority"],
+            technician=technician,
+            scheduled_at=data["scheduled_at"],
+            notes=data["notes"],
+            reason=data["reason"],
+            expected_assignment_id=data["expected_assignment"],
+        )
+        return _detail_response(request, incident)

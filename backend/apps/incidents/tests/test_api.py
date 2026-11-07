@@ -262,7 +262,7 @@ def test_unknown_scope_is_rejected(client_for, solicitante):
 def test_area_member_sees_area_incidents_regardless_of_author(
     client_for, make_user, solicitante, otro_solicitante, care_unit, area_ti, area_mantenimiento
 ):
-    planner = make_user("plan.prueba", Role.PLANIFICADOR, areas=("ti",))
+    planner = make_user("plan.prueba", Role.PLANIFICADOR, plans=("ti",))
     ti_1 = _incident(solicitante, care_unit, area_ti)
     ti_2 = _incident(otro_solicitante, care_unit, area_ti)
     _incident(solicitante, care_unit, area_mantenimiento)
@@ -275,7 +275,7 @@ def test_area_member_sees_area_incidents_regardless_of_author(
 def test_area_member_can_view_detail_but_not_other_areas(
     client_for, make_user, solicitante, care_unit, area_ti, area_mantenimiento
 ):
-    staff = make_user("tec.prueba", Role.PERSONAL_ATENCION, areas=("ti",))
+    staff = make_user("tec.prueba", Role.PERSONAL_ATENCION, assigned=("ti",))
     ti = _incident(solicitante, care_unit, area_ti)
     other_area = _incident(solicitante, care_unit, area_mantenimiento)
     client = client_for(staff)
@@ -284,13 +284,54 @@ def test_area_member_can_view_detail_but_not_other_areas(
     assert client.get(detail_url(other_area.code)).status_code == 404
 
 
+@pytest.mark.parametrize("role", [Role.PLANIFICADOR, Role.PERSONAL_ATENCION])
+def test_old_rule_role_plus_plain_membership_no_longer_grants_access(
+    client_for, make_user, solicitante, care_unit, area_ti, role
+):
+    """
+    Regla anterior: rol global + pertenencia al área. Ahora no basta: sin la función
+    explícita en el área (can_plan / can_be_assigned) no hay acceso por ninguna ruta.
+    """
+    user = make_user("antiguo.prueba", role, areas=("ti",))
+    incident = _incident(solicitante, care_unit, area_ti)
+    client = client_for(user)
+
+    assert client.get(f"{LIST_URL}?scope=area").status_code == 403
+    assert client.get(detail_url(incident.code)).status_code == 404
+    assert client.get(f"{detail_url(incident.code)}technicians/").status_code in (403, 404)
+
+
+def test_function_without_global_role_grants_nothing(
+    client_for, make_user, solicitante, care_unit, area_ti
+):
+    """La función en el área sin el rol global correspondiente no da acceso."""
+    user = make_user("sin.rol", Role.SOLICITANTE, plans=("ti",), assigned=("ti",))
+    incident = _incident(solicitante, care_unit, area_ti)
+
+    assert client_for(user).get(f"{LIST_URL}?scope=area").status_code == 403
+    assert client_for(user).get(detail_url(incident.code)).status_code == 404
+
+
+def test_superuser_without_area_function_has_no_access(
+    client_for, make_user, solicitante, care_unit, area_ti
+):
+    root = make_user("soporte.prueba", is_superuser=True)
+    incident = _incident(solicitante, care_unit, area_ti)
+    client = client_for(root)
+
+    assert client.get(f"{LIST_URL}?scope=area").status_code == 403
+    assert client.get(detail_url(incident.code)).status_code == 404
+    assert client.get(OPTIONS_URL).status_code == 403
+    assert client.get("/api/v1/incidents/planning/").status_code == 403
+
+
 def test_planner_without_membership_sees_no_area_incidents(
     client_for, make_user, solicitante, care_unit, area_ti
 ):
     planner = make_user("plan.prueba", Role.PLANIFICADOR)
     incident = _incident(solicitante, care_unit, area_ti)
 
-    assert client_for(planner).get(f"{LIST_URL}?scope=area").json()["count"] == 0
+    assert client_for(planner).get(f"{LIST_URL}?scope=area").status_code == 403
     assert client_for(planner).get(detail_url(incident.code)).status_code == 404
 
 

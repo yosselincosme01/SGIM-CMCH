@@ -45,7 +45,9 @@ Django no permite cambiar `AUTH_USER_MODEL` en una base ya migrada:
   al desarrollar ese módulo.
 - Para comprobar roles en el código: `apps.accounts.roles.has_role` y las clases de
   permiso de `apps.accounts.permissions` (`require_roles`, `IsPlanificador`, etc.).
-- `is_superuser` se reserva para el soporte técnico y pasa todas las comprobaciones de rol.
+- `is_superuser` se reserva para el soporte técnico del sitio de administración. **No**
+  concede roles funcionales ni acceso global a incidencias: `has_role` solo considera los
+  roles asignados de forma explícita (cambio introducido por el [ADR 0004](0004-planificacion.md)).
 - Las reglas sobre objetos concretos (por ejemplo, "solo sus incidencias") se
   implementarán en cada módulo de negocio.
 

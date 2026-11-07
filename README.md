@@ -55,6 +55,8 @@ npm run dev        # http://localhost:5173 (requiere Django en http://127.0.0.1:
 - Política de sesión (8 h absolutas y 30 min de inactividad): [docs/sesiones.md](docs/sesiones.md).
 
 - Incidencias (registro y consulta): [ADR 0003](docs/adr/0003-incidencias.md).
+- Planificación y asignación (rol Planificador): [ADR 0004](docs/adr/0004-planificacion.md).
+- Configurar pertenencias de demostración: [docs/planificacion-pertenencias.md](docs/planificacion-pertenencias.md).
 
 Guía completa para PowerShell: [docs/pruebas.md](docs/pruebas.md).
 

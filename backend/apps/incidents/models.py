@@ -1,15 +1,16 @@
 """
 Modelos del registro de incidencias (primera etapa).
 
-Alcance de esta etapa: registro y consulta. Las futuras entidades de asignación,
-intervención técnica, revisión y satisfacción se crearán como modelos separados
-(ver docs/adr/0003-incidencias.md); NO se mezclan en ``Incident``.
+Etapas implementadas: registro y consulta (ADR 0003), y planificación y asignación
+(ADR 0004). La intervención técnica, la conformidad y el cierre se crearán como
+modelos separados; NO se mezclan en ``Incident``.
 """
 
 import uuid
 
 from django.conf import settings
 from django.db import models
+from django.db.models import Q
 
 
 class SupportArea(models.Model):
@@ -42,14 +43,28 @@ class SupportArea(models.Model):
 
 class SupportAreaMembership(models.Model):
     """
-    Integrantes de un área de soporte. Permite que el área consulte sus incidencias
-    sin depender de qué planificador está de turno. Lo gestiona un superusuario desde
-    el admin; los criterios definitivos están pendientes de validación.
+    Integrante de un área de soporte y su función **en esa área**.
+
+    El rol global no basta: para planificar se requiere el rol ``planificador`` y
+    ``can_plan``; para recibir asignaciones, el rol ``personal_atencion`` y
+    ``can_be_assigned``. Ambas funciones son restrictivas por defecto y se habilitan
+    de forma explícita desde el admin. Una persona puede planificar en un área y ser
+    técnico en otra.
     """
 
     area = models.ForeignKey(SupportArea, on_delete=models.CASCADE, related_name="memberships")
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="area_memberships"
+    )
+    can_plan = models.BooleanField(
+        "puede planificar",
+        default=False,
+        help_text="Requiere además el rol Planificador.",
+    )
+    can_be_assigned = models.BooleanField(
+        "puede recibir asignaciones",
+        default=False,
+        help_text="Requiere además el rol Personal de atención.",
     )
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -64,13 +79,41 @@ class SupportAreaMembership(models.Model):
         return f"{self.user} · {self.area}"
 
 
+class PriorityLevel(models.Model):
+    """
+    Nivel de prioridad. Catálogo **provisional**: los niveles, sus criterios y sus
+    tiempos de atención están pendientes de validación institucional (ADR 0004).
+    No hay plazos (SLA) ni reglas automáticas asociadas.
+    """
+
+    code = models.SlugField("código", max_length=30, unique=True)
+    name = models.CharField("nombre", max_length=40)
+    order = models.PositiveSmallIntegerField(
+        "orden", unique=True, help_text="1 es el nivel más urgente."
+    )
+    description = models.CharField("descripción orientativa", max_length=300, blank=True)
+    is_active = models.BooleanField("activo", default=True)
+    is_provisional = models.BooleanField(
+        "provisional", default=True, help_text="Pendiente de validación institucional."
+    )
+
+    class Meta:
+        verbose_name = "nivel de prioridad"
+        verbose_name_plural = "niveles de prioridad"
+        ordering = ("order",)
+
+    def __str__(self) -> str:
+        return self.name
+
+
 class Incident(models.Model):
     """Incidencia registrada por un usuario autenticado."""
 
     class Status(models.TextChoices):
-        # Solo el estado inicial está implementado. Los estados futuros son una
-        # propuesta documentada en docs/adr/0003-incidencias.md, pendiente de validar.
+        # Solo la transición inicial de planificación está implementada. Los estados
+        # definitivos están pendientes de validación (docs/adr/0004-planificacion.md).
         REGISTRADA = "registrada", "Registrada"
+        ASIGNADA = "asignada", "Asignada"
 
     # null=True es necesario: el código se asigna tras el INSERT (deriva de la clave
     # primaria) en la misma transacción, y UNIQUE admite varios NULL transitorios.
@@ -104,6 +147,16 @@ class Incident(models.Model):
     status = models.CharField(
         "estado", max_length=30, choices=Status.choices, default=Status.REGISTRADA, editable=False
     )
+    priority = models.ForeignKey(
+        PriorityLevel,
+        on_delete=models.PROTECT,
+        related_name="incidents",
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name="prioridad",
+        help_text="Vacía mientras no se evalúe.",
+    )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.PROTECT,
@@ -121,6 +174,7 @@ class Incident(models.Model):
         indexes = [
             models.Index(fields=("created_by", "-created_at"), name="incident_creator_idx"),
             models.Index(fields=("support_area", "-created_at"), name="incident_area_idx"),
+            models.Index(fields=("support_area", "status"), name="incident_area_status_idx"),
         ]
 
     def __str__(self) -> str:
@@ -165,6 +219,10 @@ class IncidentEvent(models.Model):
 
     class Type(models.TextChoices):
         CREATED = "created", "Registrada"
+        PRIORITY_CHANGED = "priority_changed", "Prioridad actualizada"
+        ASSIGNED = "assigned", "Atención programada"
+        TECHNICIAN_CHANGED = "technician_changed", "Técnico responsable reasignado"
+        SCHEDULE_CHANGED = "schedule_changed", "Atención reprogramada"
 
     incident = models.ForeignKey(Incident, on_delete=models.CASCADE, related_name="events")
     event_type = models.CharField("tipo", max_length=40, choices=Type.choices)
@@ -184,3 +242,62 @@ class IncidentEvent(models.Model):
 
     def __str__(self) -> str:
         return f"{self.incident} · {self.get_event_type_display()}"
+
+
+class IncidentAssignment(models.Model):
+    """
+    Asignación de una incidencia a un técnico, con fecha y hora estimada de atención.
+
+    Las asignaciones no se editan: reasignar o reprogramar cierra la vigente y crea
+    una nueva, así se conserva el historial completo. Solo una puede estar vigente.
+    Una persona responsable por asignación (provisional); no limita que otros
+    técnicos intervengan en etapas futuras.
+    """
+
+    incident = models.ForeignKey(Incident, on_delete=models.CASCADE, related_name="assignments")
+    technician = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="incident_assignments",
+        verbose_name="técnico responsable",
+    )
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="+",
+        verbose_name="programada por",
+    )
+    scheduled_at = models.DateTimeField("fecha y hora estimada de atención")
+    notes = models.TextField("indicaciones internas", blank=True)
+    reason = models.TextField(
+        "motivo del cambio", blank=True, help_text="Obligatorio al reasignar o reprogramar."
+    )
+    is_current = models.BooleanField("vigente", default=True)
+    created_at = models.DateTimeField("creada", auto_now_add=True)
+    ended_at = models.DateTimeField("reemplazada", null=True, blank=True)
+
+    class Meta:
+        verbose_name = "asignación"
+        verbose_name_plural = "asignaciones"
+        ordering = ("created_at", "id")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("incident",),
+                condition=Q(is_current=True),
+                name="one_current_assignment_per_incident",
+            ),
+            models.CheckConstraint(
+                condition=Q(is_current=True, ended_at__isnull=True)
+                | Q(is_current=False, ended_at__isnull=False),
+                name="assignment_end_matches_current",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=("technician", "is_current", "scheduled_at"),
+                name="assignment_technician_idx",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.incident} · {self.technician}"

@@ -87,7 +87,7 @@ Cada transición se registrará como un `IncidentEvent`.
 |---|---|
 | Ver opciones y registrar (`POST /incidents/`) | Rol `solicitante`; un usuario con varios roles que incluyan `solicitante` también puede |
 | Consultar las propias (`scope=mine`) | Cualquier usuario autenticado (solo ve lo que él registró) |
-| Consultar las de un área (`scope=area`) y su detalle | Rol `planificador` o `personal_atencion` **y** pertenecer al área (`SupportAreaMembership`) |
+| Consultar las de un área (`scope=area`) y su detalle | Rol `planificador` con `can_plan`, o rol `personal_atencion` con `can_be_assigned`, en esa área. **Reemplazado por el [ADR 0004](0004-planificacion.md)**: la pertenencia sin función ya no da acceso |
 | Rol `administrador` | **Sin acceso global** a incidencias en esta etapa |
 
 - Una incidencia que el usuario no puede ver responde **404**, no 403, para no revelar si existe.
