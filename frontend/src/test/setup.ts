@@ -1,7 +1,8 @@
 import '@testing-library/jest-dom/vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, configure } from '@testing-library/react'
 import { afterAll, afterEach, beforeAll } from 'vitest'
 
+import { attentionBackend } from './fakeAttention'
 import { backend } from './fakeBackend'
 import { incidentsBackend } from './fakeIncidents'
 import { planningBackend } from './fakePlanning'
@@ -14,6 +15,10 @@ function clearCookies() {
   }
 }
 
+// Con la suite en paralelo, 1 s (valor por defecto) produce fallos intermitentes por
+// tiempo en equipos cargados; 3 s sigue detectando esperas que nunca se cumplen.
+configure({ asyncUtilTimeout: 3000 })
+
 // Cualquier petición no simulada es un error: las pruebas nunca salen a la red.
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))
 
@@ -23,6 +28,7 @@ afterEach(() => {
   backend.reset()
   incidentsBackend.reset()
   planningBackend.reset()
+  attentionBackend.reset()
   clearCookies()
   localStorage.clear()
   sessionStorage.clear()

@@ -76,7 +76,19 @@ export function IncidentDetailPage() {
         <StatusBadge status={incident.status} label={incident.status_label} />
       </header>
 
-      {incident.scheduled_at && (
+      {incident.closed_at && (
+        <section className="detail-card schedule-note" aria-labelledby="detail-closed">
+          <h2 id="detail-closed" className="detail-card__title">
+            Atención finalizada
+          </h2>
+          <p>
+            El área de soporte cerró la incidencia el{' '}
+            <strong>{formatDateTime(incident.closed_at)}</strong> (hora de Lima).
+          </p>
+        </section>
+      )}
+
+      {!incident.closed_at && incident.scheduled_at && (
         <section className="detail-card schedule-note" aria-labelledby="detail-schedule">
           <h2 id="detail-schedule" className="detail-card__title">
             Atención programada

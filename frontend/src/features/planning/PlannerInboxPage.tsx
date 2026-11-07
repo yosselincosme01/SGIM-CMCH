@@ -20,11 +20,13 @@ import { plannerIncidentPath } from './paths'
 import { PlanningBreadcrumb, PriorityBadge, ProvisionalPriorityNote } from './PlanningParts'
 
 const PAGE_SIZE = 20
-const FILTER_KEYS = ['area', 'status', 'priority', 'scheduled_on', 'q', 'ordering'] as const
+const FILTER_KEYS = ['area', 'status', 'priority', 'scheduled_on', 'q', 'ordering', 'queue'] as const
 
 const STATUS_OPTIONS = [
   { value: 'registrada', label: 'Registrada (sin asignar)' },
   { value: 'asignada', label: 'Asignada' },
+  { value: 'cerrada', label: 'Cerrada' },
+  { value: 'reabierta', label: 'Reabierta (por programar)' },
 ]
 const ORDERING_OPTIONS = [
   { value: '', label: 'Más recientes primero' },
@@ -179,6 +181,35 @@ export function PlannerInboxPage() {
                 <span className="summary-chip__label">Programadas para hoy</span>
               </button>
             </li>
+            <li>
+              <button
+                type="button"
+                className="summary-chip"
+                aria-pressed={filters.queue === 'pending'}
+                onClick={() =>
+                  update({ queue: filters.queue === 'pending' ? '' : 'pending', status: '' })
+                }
+              >
+                <span className="summary-chip__value">{options.counts.pending}</span>
+                <span className="summary-chip__label">Pendientes de atención</span>
+              </button>
+            </li>
+            <li>
+              <button
+                type="button"
+                className="summary-chip"
+                aria-pressed={filters.queue === 'verification'}
+                onClick={() =>
+                  update({
+                    queue: filters.queue === 'verification' ? '' : 'verification',
+                    status: '',
+                  })
+                }
+              >
+                <span className="summary-chip__value">{options.counts.to_verify}</span>
+                <span className="summary-chip__label">Cerradas por verificar</span>
+              </button>
+            </li>
           </ul>
 
           <details className="filters" open={hasFilters || undefined}>
@@ -308,6 +339,14 @@ export function PlannerInboxPage() {
                       </td>
                       <td data-label="Estado">
                         <StatusBadge status={item.status} label={item.status_label} />
+                        {item.last_result && (
+                          <span className="planning-table__meta">
+                            Última intervención: {item.last_result.label}
+                          </span>
+                        )}
+                        {item.status === 'cerrada' && item.pending_verification && (
+                          <span className="planning-table__meta">Pendiente de verificación</span>
+                        )}
                       </td>
                       <td data-label="Técnico y fecha">
                         {item.assignment ? (
@@ -325,9 +364,9 @@ export function PlannerInboxPage() {
                         <Link
                           to={plannerIncidentPath(item.code)}
                           className="btn btn--secondary planning-table__action"
-                          aria-label={`${item.assignment ? "Ver y reprogramar" : "Planificar"} ${item.code}`}
+                          aria-label={`${actionLabel(item)} ${item.code}`}
                         >
-                          {item.assignment ? 'Ver y reprogramar' : 'Planificar'}
+                          {actionLabel(item)}
                         </Link>
                       </td>
                     </tr>
@@ -362,6 +401,11 @@ export function PlannerInboxPage() {
       )}
     </div>
   )
+}
+
+function actionLabel(item: PlanningItem): string {
+  if (item.status === 'cerrada') return item.pending_verification ? 'Verificar' : 'Ver'
+  return item.assignment ? 'Ver y reprogramar' : 'Planificar'
 }
 
 function FilterSelect({

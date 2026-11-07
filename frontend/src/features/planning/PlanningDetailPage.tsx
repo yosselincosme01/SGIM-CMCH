@@ -14,6 +14,8 @@ import {
 } from '../incidents/IncidentDetailSections'
 import { StatusBadge } from '../incidents/StatusBadge'
 import { fetchPlanningOptions, fetchTechnicians, type Technician } from './api'
+import { InterventionHistory } from '../incidents/InterventionHistory'
+import { ClosurePanel } from './ClosurePanel'
 import { PlanningPanel } from './PlanningPanel'
 import { PLANNER_PATH } from './paths'
 import { PlanningBreadcrumb, PriorityBadge } from './PlanningParts'
@@ -128,6 +130,23 @@ export function PlanningDetailPage() {
 
       <div className="planning-layout">
         <aside className="planning-layout__panel" aria-label="Planificación">
+          {incident.status === 'cerrada' ? (
+            <ClosurePanel
+              incident={incident}
+              onSaved={(updated) => {
+                setIncident(updated)
+                // Tras reabrir, se vuelve a programar: hace falta la lista de técnicos.
+                if (updated.permissions?.can_plan) {
+                  fetchTechnicians(updated.code)
+                    .then((result) => setTechnicians(result.results))
+                    .catch(() => {})
+                }
+              }}
+              onReload={() => {
+                fetchAll().then(apply).catch(() => {})
+              }}
+            />
+          ) : (
           <PlanningPanel
             incident={incident}
             priorities={priorities}
@@ -142,10 +161,12 @@ export function PlanningDetailPage() {
             onReload={() => fetchAll().then(apply)}
             onDialogChange={setBlocked}
           />
+          )}
         </aside>
         <div className="planning-layout__main stack">
           <IncidentSummaryCard incident={incident} />
           <IncidentEvidence incident={incident} />
+          <InterventionHistory interventions={incident.interventions ?? []} />
           <IncidentHistory events={incident.events} />
         </div>
       </div>

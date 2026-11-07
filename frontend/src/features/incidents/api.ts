@@ -78,6 +78,52 @@ export interface CurrentAssignment {
   created_at: string
 }
 
+export interface Verification {
+  id: number
+  result: 'conforming' | 'not_conforming'
+  result_label: string
+  observations: string
+  verified_by: Person
+  created_at: string
+}
+
+export type InterventionResult = 'solved' | 'in_progress' | 'not_solved'
+
+export interface Intervention {
+  id: number
+  assignment: number
+  technician: Person
+  result: InterventionResult
+  result_label: string
+  diagnosis: string
+  actions_taken: string
+  used_parts: boolean
+  used_parts_detail: string
+  parts_required: boolean
+  parts_required_detail: string
+  unresolved_reason: string
+  observations: string
+  photos: IncidentAttachment[]
+  is_closure: boolean
+  verification: Verification | null
+  created_at: string
+}
+
+export interface Closure {
+  intervention: number
+  closed_by: Person
+  closed_at: string
+  pending_verification: boolean
+  verification: Verification | null
+}
+
+export interface IncidentPermissions {
+  can_plan: boolean
+  can_intervene: boolean
+  can_verify: boolean
+  can_reopen: boolean
+}
+
 export interface IncidentDetail extends Omit<IncidentSummary, 'has_attachments'> {
   description: string
   prior_actions: string
@@ -94,7 +140,12 @@ export interface IncidentDetail extends Omit<IncidentSummary, 'has_attachments'>
   /** Vista del personal del área. */
   priority?: PriorityLevel | null
   assignment?: CurrentAssignment | null
-  permissions?: { can_plan: boolean }
+  /** Historial técnico y cierre vigente (solo personal del área). */
+  interventions?: Intervention[]
+  closure?: Closure | null
+  permissions?: IncidentPermissions
+  /** Vista del solicitante: fecha del cierre técnico vigente. */
+  closed_at?: string | null
 }
 
 export interface Page<T> {

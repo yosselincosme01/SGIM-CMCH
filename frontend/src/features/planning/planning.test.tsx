@@ -245,7 +245,9 @@ describe('programación de la atención', () => {
   })
 
   it('sin permiso de planificar muestra la información sin formulario', async () => {
-    const incident = planningBackend.seed({ permissions: { can_plan: false } })
+    const incident = planningBackend.seed({
+      permissions: { can_plan: false, can_intervene: false, can_verify: false, can_reopen: false },
+    })
     signInPlanner()
     renderApp(`/planificador/incidencias/${incident.code}`)
 

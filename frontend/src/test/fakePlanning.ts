@@ -95,7 +95,9 @@ export const planningBackend: PlanningState & {
       events: [{ ...event('created', 'Registrada'), actor: 'Ana Prueba' }],
       priority: null,
       assignment: null,
-      permissions: { can_plan: true },
+      permissions: { can_plan: true, can_intervene: false, can_verify: false, can_reopen: false },
+      interventions: [],
+      closure: null,
       ...overrides,
     }
     planningBackend.incidents.push(incident)
@@ -142,6 +144,8 @@ function summary(incident: IncidentDetail): PlanningItem {
         }
       : null,
     has_attachments: false,
+    last_result: null,
+    pending_verification: Boolean(incident.closure?.pending_verification),
   }
 }
 
@@ -213,7 +217,8 @@ export const planningHandlers = [
 
   // Detalle del personal del área. Si la incidencia no está aquí, sigue al siguiente handler.
   http.get(`${API}/incidents/:code/`, ({ params }) => {
-    if (!isPlanner()) return undefined
+    const roles = backend.sessionUser?.roles ?? []
+    if (!roles.includes('planificador') && !roles.includes('personal_atencion')) return undefined
     const incident = find(params.code)
     if (!incident) return undefined
     return HttpResponse.json(incident)

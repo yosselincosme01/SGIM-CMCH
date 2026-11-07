@@ -27,6 +27,7 @@ export const USERS = {
   multirol: makeUser(2, 'luis.prueba', 'Luis', 'Prueba', ['planificador', 'personal_atencion']),
   administrador: makeUser(3, 'admin.prueba', 'Eva', 'Prueba', ['administrador']),
   sinRoles: makeUser(4, 'sin.roles', '', '', []),
+  tecnico: makeUser(5, 'tec.uno', 'Tomás', 'Prueba', ['personal_atencion']),
 } as const
 
 export interface RecordedRequest {
