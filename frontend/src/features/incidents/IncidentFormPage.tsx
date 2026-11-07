@@ -8,7 +8,6 @@ import { Button } from '../../shared/ui/Button'
 import { LoadingState } from '../../shared/ui/LoadingState'
 import { SelectField } from '../../shared/ui/SelectField'
 import { TextAreaField } from '../../shared/ui/TextAreaField'
-import { TextField } from '../../shared/ui/TextField'
 import {
   createIncident,
   fetchIncidentOptions,
@@ -16,10 +15,11 @@ import {
   type IncidentOptions,
   type NewIncident,
 } from './api'
+import { EQUIPMENT_QR_OPTIONS, type EquipmentQrStatus } from './equipment'
 import { IncidentBreadcrumb } from './IncidentBreadcrumb'
+import { QrCodeInput } from './QrCodeInput'
 import { SUPPORT_AREA_HINTS } from './supportAreas'
 import {
-  ASSET_REFERENCE_MAX,
   DESCRIPTION_MAX,
   type IncidentFormErrors,
   PHOTO_TYPES,
@@ -35,16 +35,18 @@ const EMPTY: NewIncident = {
   supportArea: '',
   description: '',
   priorActions: '',
-  assetReference: '',
+  equipmentQrStatus: '',
+  qrCode: '',
   photo: null,
 }
 
 const FIELD_ORDER: (keyof IncidentFormErrors)[] = [
   'careUnit',
+  'equipmentQrStatus',
+  'qrCode',
   'supportArea',
   'description',
   'priorActions',
-  'assetReference',
   'photo',
 ]
 
@@ -88,6 +90,16 @@ export function IncidentFormPage() {
   function update<K extends keyof NewIncident>(key: K, value: NewIncident[K]) {
     setForm((current) => ({ ...current, [key]: value }))
     setErrors((current) => ({ ...current, [key]: undefined }))
+  }
+
+  function selectEquipment(status: EquipmentQrStatus) {
+    // Al cambiar de opción se descarta el código: nunca se envían datos ocultos.
+    setForm((current) => ({
+      ...current,
+      equipmentQrStatus: status,
+      qrCode: status === 'qr_readable' ? current.qrCode : '',
+    }))
+    setErrors((current) => ({ ...current, equipmentQrStatus: undefined, qrCode: undefined }))
   }
 
   function handlePhoto(event: ChangeEvent<HTMLInputElement>) {
@@ -257,16 +269,57 @@ export function IncidentFormPage() {
               error={errors.careUnit}
             />
           </div>
-          <div data-field="assetReference">
-            <TextField
-              label="Equipo o activo (opcional)"
-              hint="Código patrimonial, número de serie o nombre del equipo, si lo conoces."
-              value={form.assetReference}
-              maxLength={ASSET_REFERENCE_MAX}
-              onChange={(event) => update('assetReference', event.target.value)}
-              error={errors.assetReference}
-            />
+        </fieldset>
+
+        <fieldset
+          className="form-section"
+          data-field="equipmentQrStatus"
+          aria-describedby={errors.equipmentQrStatus ? 'equipment-error' : undefined}
+          aria-invalid={errors.equipmentQrStatus ? true : undefined}
+        >
+          <legend className="form-section__title">
+            Identificación del equipo <span className="field__required" aria-hidden="true">*</span>
+          </legend>
+          <p className="field__label" id="equipment-question">
+            ¿El equipo tiene código QR?
+          </p>
+          <div
+            className="choice-grid"
+            role="radiogroup"
+            aria-required="true"
+            aria-labelledby="equipment-question"
+          >
+            {EQUIPMENT_QR_OPTIONS.map((option) => (
+              <label
+                key={option.value}
+                className={`choice ${form.equipmentQrStatus === option.value ? 'choice--selected' : ''}`}
+              >
+                <input
+                  type="radio"
+                  name="equipment_qr_status"
+                  value={option.value}
+                  checked={form.equipmentQrStatus === option.value}
+                  onChange={() => selectEquipment(option.value)}
+                />
+                <span className="choice__title">{option.label}</span>
+                <span className="choice__hint">{option.hint}</span>
+              </label>
+            ))}
           </div>
+          {errors.equipmentQrStatus && (
+            <p id="equipment-error" className="field__error">
+              {errors.equipmentQrStatus}
+            </p>
+          )}
+          {form.equipmentQrStatus === 'qr_readable' && (
+            <div data-field="qrCode">
+              <QrCodeInput
+                value={form.qrCode}
+                onCode={(value) => update('qrCode', value)}
+                error={errors.qrCode}
+              />
+            </div>
+          )}
         </fieldset>
 
         <fieldset

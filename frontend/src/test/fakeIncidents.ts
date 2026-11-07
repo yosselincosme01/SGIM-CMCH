@@ -11,6 +11,39 @@ const CARE_UNITS = [
   { code: 'demo-emergencia', name: '[DEMO] Emergencia', is_demo: true },
   { code: 'demo-laboratorio', name: '[DEMO] Laboratorio', is_demo: true },
 ]
+const QR_LABELS: Record<string, string> = {
+  qr_readable: 'Tiene QR y puedo leerlo',
+  qr_unreadable: 'Tiene QR, pero no puedo leerlo',
+  no_qr: 'El equipo no tiene QR',
+  not_equipment: 'No corresponde a un equipo',
+}
+/** Campos que acepta el registro (igual que el serializer de Django). */
+const ALLOWED_FIELDS = new Set([
+  'care_unit',
+  'support_area',
+  'description',
+  'prior_actions',
+  'equipment_qr_status',
+  'qr_code',
+  'photo',
+])
+
+/** Reglas de identificación del backend (ADR 0005), simplificadas para las pruebas. */
+function identificationErrors(fields: Record<string, string>): Record<string, string[]> | null {
+  const unexpected = Object.keys(fields).filter((key) => !ALLOWED_FIELDS.has(key))
+  if (unexpected.length) {
+    return Object.fromEntries(unexpected.map((key) => [key, ['Este campo no está permitido.']]))
+  }
+  const status = fields.equipment_qr_status
+  const code = (fields.qr_code ?? '').trim()
+  if (!QR_LABELS[status]) return { equipment_qr_status: ['Indica si el equipo tiene código QR.'] }
+  if (status === 'qr_readable' && !code) return { qr_code: ['Escribe el contenido del código QR.'] }
+  if (status !== 'qr_readable' && code) {
+    return { qr_code: ['No corresponde registrar un código QR con la opción seleccionada.'] }
+  }
+  return null
+}
+
 const SUPPORT_AREAS = [
   { code: 'ingenieria_clinica', name: 'Ingeniería Clínica' },
   { code: 'mantenimiento', name: 'Mantenimiento' },
@@ -54,7 +87,9 @@ export const incidentsBackend: IncidentState & {
       support_area: SUPPORT_AREAS[2],
       description: 'Descripción ficticia de una incidencia de prueba.',
       prior_actions: '',
-      asset_reference: '',
+      equipment_qr_status: 'not_equipment' as const,
+      equipment_qr_status_label: 'No corresponde a un equipo',
+      qr_code: '',
       created_by: { username: owner, full_name: owner },
       created_at: new Date(Date.UTC(2026, 10, id, 15, 0)).toISOString(),
       attachments: [],
@@ -124,12 +159,17 @@ export const incidentHandlers = [
     if (incidentsBackend.serverErrors) {
       return HttpResponse.json(incidentsBackend.serverErrors, { status: 400 })
     }
+    const invalid = identificationErrors(fields)
+    if (invalid) return HttpResponse.json(invalid, { status: 400 })
+    const qrStatus = fields.equipment_qr_status as IncidentDetail['equipment_qr_status']
     const incident = incidentsBackend.seed(user.username, {
       care_unit: CARE_UNITS.find((unit) => unit.code === fields.care_unit) ?? CARE_UNITS[0],
       support_area: SUPPORT_AREAS.find((area) => area.code === fields.support_area) ?? SUPPORT_AREAS[0],
       description: fields.description,
       prior_actions: fields.prior_actions ?? '',
-      asset_reference: fields.asset_reference ?? '',
+      equipment_qr_status: qrStatus,
+      equipment_qr_status_label: QR_LABELS[qrStatus],
+      qr_code: (fields.qr_code ?? '').trim(),
       created_by: { username: user.username, full_name: user.full_name },
     })
     return HttpResponse.json(incident, { status: 201 })

@@ -407,3 +407,13 @@
     flex: 1 1 100%;
   }
 }
+
+/* --- Identificación del equipo (QR) -------------------------------------------- */
+
+/* El contenido del QR se muestra como texto literal: monoespaciado y sin desbordes. */
+.qr-code,
+.qr-code-input {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}

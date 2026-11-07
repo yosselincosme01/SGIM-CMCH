@@ -3,16 +3,25 @@
  * La validación definitiva —incluido el contenido real de la imagen— la hace el backend.
  */
 import type { NewIncident } from './api'
+import { validateEquipment } from './equipment'
 
 export const DESCRIPTION_MIN = 10
 export const DESCRIPTION_MAX = 2000
 export const PRIOR_ACTIONS_MAX = 1000
-export const ASSET_REFERENCE_MAX = 100
 export const PHOTO_MAX_BYTES = 5 * 1024 * 1024
 export const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const
 
 export type IncidentFormErrors = Partial<
-  Record<'careUnit' | 'supportArea' | 'description' | 'priorActions' | 'assetReference' | 'photo', string>
+  Record<
+    | 'careUnit'
+    | 'equipmentQrStatus'
+    | 'qrCode'
+    | 'supportArea'
+    | 'description'
+    | 'priorActions'
+    | 'photo',
+    string
+  >
 >
 
 export function validatePhoto(file: File | null): string | undefined {
@@ -39,9 +48,7 @@ export function validateIncident(data: NewIncident): IncidentFormErrors {
   if (data.priorActions.trim().length > PRIOR_ACTIONS_MAX) {
     errors.priorActions = `No puede superar ${PRIOR_ACTIONS_MAX} caracteres.`
   }
-  if (data.assetReference.trim().length > ASSET_REFERENCE_MAX) {
-    errors.assetReference = `No puede superar ${ASSET_REFERENCE_MAX} caracteres.`
-  }
+  Object.assign(errors, validateEquipment(data.equipmentQrStatus, data.qrCode))
   const photoError = validatePhoto(data.photo)
   if (photoError) errors.photo = photoError
   return errors
@@ -53,7 +60,8 @@ export const SERVER_FIELD_MAP: Record<string, keyof IncidentFormErrors> = {
   support_area: 'supportArea',
   description: 'description',
   prior_actions: 'priorActions',
-  asset_reference: 'assetReference',
+  equipment_qr_status: 'equipmentQrStatus',
+  qr_code: 'qrCode',
   photo: 'photo',
 }
 
