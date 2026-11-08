@@ -36,6 +36,8 @@ export default defineConfig({
     // Solo se procesa la hoja de estilos global, para verificar los tokens de marca.
     css: { include: [/src\/styles\/index\.css/] },
     restoreMocks: true,
+    // La suite completa corre en paralelo: margen para equipos cargados.
+    testTimeout: 15_000,
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{ts,tsx}'],

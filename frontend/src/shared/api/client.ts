@@ -131,3 +131,59 @@ export function apiRequest<T>(path: string, options: RequestOptions = {}): Promi
 export function backgroundRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   return send<T>(path, { ...options, passive: true })
 }
+
+export interface DownloadedFile {
+  blob: Blob
+  filename: string
+}
+
+const DOWNLOAD_TIMEOUT_MS = 60_000
+
+function filenameFrom(response: Response, fallback: string): string {
+  const header = response.headers.get('Content-Disposition') ?? ''
+  const match = /filename="([^"]+)"/.exec(header)
+  // Solo nombres simples: nunca rutas que el navegador pudiera interpretar.
+  return match && /^[\w.-]+$/.test(match[1]) ? match[1] : fallback
+}
+
+/**
+ * Descarga de un archivo (GET) por una acción del usuario. Usa la misma sesión, el
+ * mismo control de errores y renueva la inactividad; no sigue redirecciones.
+ */
+export async function downloadRequest(
+  path: string,
+  fallbackName: string,
+  signal?: AbortSignal,
+): Promise<DownloadedFile> {
+  const url = buildUrl(path)
+  const timeout = new AbortController()
+  const timer = setTimeout(() => timeout.abort(), DOWNLOAD_TIMEOUT_MS)
+  let response: Response
+  try {
+    response = await fetch(url, {
+      method: 'GET',
+      credentials: 'same-origin',
+      cache: 'no-store',
+      redirect: 'error',
+      signal: signal ? AbortSignal.any([signal, timeout.signal]) : timeout.signal,
+    })
+  } catch (cause) {
+    if (signal?.aborted) throw cause
+    throw new ApiError({
+      kind: timeout.signal.aborted ? 'timeout' : 'network',
+      status: 0,
+      message: timeout.signal.aborted
+        ? 'El servidor tardó demasiado en generar el archivo.'
+        : 'No se pudo conectar con el servidor.',
+    })
+  } finally {
+    clearTimeout(timer)
+  }
+  if (!response.ok) {
+    const error = errorFromResponse(response, await readJson(response))
+    if (error.kind === 'unauthenticated') unauthorizedEvents.emit(error)
+    throw error
+  }
+  activityEvents.emit()
+  return { blob: await response.blob(), filename: filenameFrom(response, fallbackName) }
+}

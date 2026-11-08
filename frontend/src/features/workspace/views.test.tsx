@@ -71,12 +71,13 @@ describe('vistas por rol', () => {
     ).toBeInTheDocument()
   })
 
-  it('las páginas de rol no inventan módulos ni permisos de incidencias', async () => {
+  it('la vista Administrador muestra indicadores, sin acciones operativas sobre incidencias', async () => {
     backend.signIn(USERS.administrador)
     renderApp('/administrador')
 
-    expect(await screen.findByRole('heading', { name: 'Administrador' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: 'Módulos en preparación' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Administrador', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Incidencias (por ticket)' })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /Planificar|Atender/ })).not.toBeInTheDocument()
   })
 })
 

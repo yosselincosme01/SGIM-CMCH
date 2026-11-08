@@ -16,7 +16,7 @@ import {
   type PlanningItem,
   type PlanningOptions,
 } from './api'
-import { plannerIncidentPath } from './paths'
+import { PLANNER_PATH, plannerIncidentPath } from './paths'
 import { PlanningBreadcrumb, PriorityBadge, ProvisionalPriorityNote } from './PlanningParts'
 
 const PAGE_SIZE = 20
@@ -122,6 +122,11 @@ export function PlannerInboxPage() {
         <h1 className="page__title">Planificador</h1>
         <p className="page__lead">
           Prioriza y programa la atención de las incidencias de tus áreas autorizadas.
+        </p>
+        <p>
+          <Link to={`${PLANNER_PATH}/indicadores`} className="btn btn--secondary">
+            Indicadores y reportes
+          </Link>
         </p>
       </header>
 
