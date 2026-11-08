@@ -59,6 +59,7 @@ npm run dev        # http://localhost:5173 (requiere Django en http://127.0.0.1:
 - Identificación del equipo mediante QR: [ADR 0005](docs/adr/0005-identificacion-qr.md).
 - Probar el formulario y la cámara desde un celular: [docs/pruebas-movil.md](docs/pruebas-movil.md).
 - Atención, cierre técnico, verificación y reapertura: [ADR 0006](docs/adr/0006-atencion-verificacion.md).
+- Administración, indicadores y reportes Excel: [ADR 0007](docs/adr/0007-administracion-reportes.md) y [procedimientos](docs/administracion.md).
 - Configurar pertenencias de demostración: [docs/planificacion-pertenencias.md](docs/planificacion-pertenencias.md).
 
 Guía completa para PowerShell: [docs/pruebas.md](docs/pruebas.md).
