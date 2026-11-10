@@ -9,7 +9,7 @@ export function ForbiddenPage() {
       <header className="page__header">
         <h1 className="page__title">No tienes acceso a esta vista</h1>
         <p className="page__lead">
-          Tu cuenta no tiene asignado el rol necesario. Si crees que es un error, contacta al
+          Tu cuenta no tiene habilitada esta función. Si crees que es un error, contacta al
           administrador del sistema.
         </p>
       </header>

@@ -95,15 +95,15 @@ describe('monitor de sesión', () => {
   it('al llegar a cero consulta al servidor y, si expiró, oculta todo y redirige al login', async () => {
     signedIn(1)
     backend.expireAfterStatusChecks = 1 // la segunda consulta responde 401 session_expired
-    renderApp('/solicitante')
+    renderApp('/incidencias')
 
-    expect(await screen.findByRole('heading', { name: 'Solicitante' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Mis incidencias', level: 1 })).toBeInTheDocument()
 
     expect(
       await screen.findByText('Tu sesión se cerró por inactividad', {}, { timeout: 4000 }),
     ).toBeInTheDocument()
     expect(screen.queryByTestId('protected-content')).not.toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Solicitante' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Mis incidencias', level: 1 })).not.toBeInTheDocument()
     expect(screen.getByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument()
   })
 

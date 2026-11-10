@@ -3,7 +3,10 @@ Gestión de cuentas operativas por el Administrador del SGIM (ADR 0007).
 
 Principios:
 - **Mínimo privilegio:** el Administrador solo gestiona los roles operativos
-  (Solicitante, Planificador, Personal de atención) y las funciones por área.
+  (Solicitante, Planificador, Personal de atención) y las funciones por área:
+  planificar (``can_plan``), registrar atenciones (``can_be_assigned``) y verificar
+  conformidad (``can_verify``). Las tres son independientes; verificar no exige el rol
+  Planificador (ADR 0008).
 - **Sin escalamiento:** no puede otorgar el rol Administrador, ni modificar cuentas
   administrativas, de superusuario o de staff, ni su propia cuenta. Las cuentas
   administrativas se crean solo con el procedimiento técnico de TI
@@ -20,7 +23,7 @@ from django.core.exceptions import PermissionDenied, ValidationError
 from django.db import transaction
 from django.db.models.functions import Lower
 
-from apps.accounts.roles import Role, get_roles, has_role
+from apps.accounts.roles import OPERATIONAL_ROLES, Role, get_roles, has_role
 from apps.incidents.models import Incident, IncidentAssignment, SupportArea, SupportAreaMembership
 
 from .models import AuditLog
@@ -32,7 +35,7 @@ PROTECTED = "Las cuentas administrativas solo se gestionan mediante el procedimi
 SELF_CHANGE = "No puedes modificar tu propia cuenta desde la administración."
 ADMIN_ROLE = "El rol Administrador no se puede otorgar desde la aplicación."
 OPEN_ASSIGNMENTS = (
-    "La persona tiene asignaciones vigentes. Pide al Planificador que las reasigne antes de "
+    "La persona tiene asignaciones vigentes. Pide al Responsable de Área que las reasigne antes de "
     "retirarle la función o desactivar la cuenta."
 )
 
@@ -92,8 +95,11 @@ def clean_roles(roles) -> list[str]:
 
 def clean_memberships(memberships, roles: list[str]) -> dict[str, dict]:
     """
-    ``[{"area": "ti", "can_plan": bool, "can_be_assigned": bool}, …]`` → por código.
-    Una función por área exige el rol correspondiente; sin funciones, no hay pertenencia.
+    ``[{"area": "ti", "can_plan": bool, "can_be_assigned": bool, "can_verify": bool}, …]``
+    → por código. Planificar exige el rol Planificador y registrar atenciones, el rol
+    Personal de atención. Verificar conformidad solo exige una cuenta operativa (algún
+    rol operativo), no el rol Planificador. Las funciones son independientes: ninguna se
+    concede ni se retira por otra. Sin funciones, no hay pertenencia.
     """
     areas = {area.code: area for area in SupportArea.objects.filter(is_active=True)}
     result: dict[str, dict] = {}
@@ -105,9 +111,14 @@ def clean_memberships(memberships, roles: list[str]) -> dict[str, dict]:
             raise ValidationError({"memberships": "Un área aparece más de una vez."})
         can_plan = item.get("can_plan") is True
         can_be_assigned = item.get("can_be_assigned") is True
+        can_verify = item.get("can_verify") is True
         if can_plan and Role.PLANIFICADOR not in roles:
             raise ValidationError(
-                {"memberships": "Para planificar en un área, asigna también el rol Planificador."}
+                {
+                    "memberships": (
+                        "Para planificar en un área, asigna también el rol Responsable de Área."
+                    )
+                }
             )
         if can_be_assigned and Role.PERSONAL_ATENCION not in roles:
             raise ValidationError(
@@ -117,18 +128,27 @@ def clean_memberships(memberships, roles: list[str]) -> dict[str, dict]:
                     )
                 }
             )
-        if can_plan or can_be_assigned:
+        if can_verify and not set(roles) & set(OPERATIONAL_ROLES):
+            raise ValidationError(
+                {"memberships": "Para verificar conformidad, asigna al menos un rol operativo."}
+            )
+        if can_plan or can_be_assigned or can_verify:
             result[code] = {
                 "area": areas[code],
                 "can_plan": can_plan,
                 "can_be_assigned": can_be_assigned,
+                "can_verify": can_verify,
             }
     return result
 
 
 def _current_memberships(user) -> dict[str, dict]:
     return {
-        m.area.code: {"can_plan": m.can_plan, "can_be_assigned": m.can_be_assigned}
+        m.area.code: {
+            "can_plan": m.can_plan,
+            "can_be_assigned": m.can_be_assigned,
+            "can_verify": m.can_verify,
+        }
         for m in SupportAreaMembership.objects.filter(user=user).select_related("area")
     }
 
@@ -145,7 +165,11 @@ def _apply_memberships(user, wanted: dict[str, dict]) -> None:
         SupportAreaMembership.objects.update_or_create(
             user=user,
             area=data["area"],
-            defaults={"can_plan": data["can_plan"], "can_be_assigned": data["can_be_assigned"]},
+            defaults={
+                "can_plan": data["can_plan"],
+                "can_be_assigned": data["can_be_assigned"],
+                "can_verify": data["can_verify"],
+            },
         )
 
 
@@ -243,6 +267,7 @@ def update_operational_user(
 
     current_roles = [r for r in get_roles(user) if r in MANAGED_ROLES]
     new_roles = clean_roles(current_roles if roles is None else roles)
+    operational = bool(set(new_roles) & set(OPERATIONAL_ROLES))
     if memberships is None:
         # Si se retira un rol, sus funciones por área dejan de tener efecto: se retiran.
         memberships = [
@@ -250,6 +275,7 @@ def update_operational_user(
                 "area": code,
                 "can_plan": data["can_plan"] and Role.PLANIFICADOR in new_roles,
                 "can_be_assigned": data["can_be_assigned"] and Role.PERSONAL_ATENCION in new_roles,
+                "can_verify": data["can_verify"] and operational,
             }
             for code, data in _current_memberships(user).items()
         ]

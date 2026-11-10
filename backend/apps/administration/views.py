@@ -13,8 +13,9 @@ from rest_framework.views import APIView
 
 from apps.accounts.permissions import IsAdministrador
 from apps.accounts.roles import Role
+from apps.incidents.models import Incident
 
-from . import metrics, reports, user_services
+from . import incidents, metrics, reports, user_services
 from .models import AuditLog
 from .serializers import (
     ActivationSerializer,
@@ -161,6 +162,54 @@ class AuditLogListView(generics.ListAPIView):
                 queryset.filter(target_user_id=target) if target.isdigit() else queryset.none()
             )
         return queryset
+
+
+# --- Consulta global de incidencias (solo lectura, ADR 0009) --------------------------
+
+
+class AdminIncidentListView(generics.ListAPIView):
+    """
+    Todas las incidencias, de solo lectura. Filtros: ``area``, ``status``,
+    ``priority`` (``none`` = sin prioridad), ``q`` (código o descripción) y
+    ``date_from``/``date_to`` (fecha de registro, AAAA-MM-DD, hora de Lima; opcionales).
+    """
+
+    serializer_class = incidents.AdminIncidentListSerializer
+    permission_classes = [IsAuthenticated, IsAdministrador]
+
+    def get_queryset(self):
+        params = self.request.query_params
+        queryset = incidents.global_incidents()
+        if area := params.get("area"):
+            queryset = queryset.filter(support_area__code=area)
+        if state := params.get("status"):
+            if state not in Incident.Status.values:
+                raise serializers.ValidationError({"status": "Estado no válido."})
+            queryset = queryset.filter(status=state)
+        if priority := params.get("priority"):
+            if priority == "none":
+                queryset = queryset.filter(priority__isnull=True)
+            else:
+                queryset = queryset.filter(priority__code=priority)
+        if text := params.get("q", "").strip()[:100]:
+            queryset = queryset.filter(Q(code__icontains=text) | Q(description__icontains=text))
+        start, end = incidents.registration_range(params)
+        if start:
+            queryset = queryset.filter(created_at__gte=start)
+        if end:
+            queryset = queryset.filter(created_at__lt=end)
+        return queryset.order_by("-created_at", "-id")
+
+
+class AdminIncidentDetailView(APIView):
+    """Detalle de solo lectura, sin evidencia descargable ni acciones."""
+
+    permission_classes = [IsAuthenticated, IsAdministrador]
+
+    def get(self, request: Request, code: str) -> Response:
+        incident = get_object_or_404(incidents.global_detail_queryset(), code=code.strip().upper())
+        serializer = incidents.AdminIncidentDetailSerializer(incident, context={"request": request})
+        return Response(serializer.data)
 
 
 # --- Indicadores y reportes (Administrador: global; Planificador: sus áreas) ---------

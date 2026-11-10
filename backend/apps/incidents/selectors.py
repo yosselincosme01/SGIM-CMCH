@@ -3,20 +3,39 @@ Consultas de incidencias según los permisos del usuario.
 
 Todas las reglas de acceso por área pasan por este módulo (ADR 0004):
 
-- Cualquier usuario consulta las incidencias que él mismo registró.
-- Un **Planificador** (rol ``planificador``) ve y gestiona solo las incidencias de las
-  áreas activas donde su pertenencia tiene ``can_plan=True``.
-- Un técnico (rol ``personal_atencion``) ve las incidencias de las áreas activas donde
-  su pertenencia tiene ``can_be_assigned=True``.
+- Toda cuenta operativa activa (con un rol Solicitante, Planificador o Personal de
+  atención) consulta las incidencias que ella misma registró, y solo esas (ADR 0008).
+- Cada función se concede **por área** y es independiente de las demás (ADR 0008):
+  - planificar: rol ``planificador`` y ``can_plan=True``;
+  - recibir asignaciones y registrar atenciones: rol ``personal_atencion`` y
+    ``can_be_assigned=True``;
+  - verificar conformidad: ``can_verify=True`` en una cuenta operativa activa, **sin**
+    exigir el rol Planificador ni ``can_plan``. Nadie verifica el cierre de una
+    intervención que ejecutó (separación de funciones).
+- El personal ve en detalle las incidencias de las áreas donde tiene alguna función.
 - El rol global sin la función en el área no da acceso, y la función en el área sin
   el rol tampoco. No hay acceso entre áreas ni acceso global del administrador o del
-  superusuario. La UPS del ticket no interviene en los permisos.
+  superusuario. La UPS del ticket no interviene en los permisos. La vista que el
+  usuario elige en la interfaz tampoco: el backend evalúa siempre todas sus funciones.
 """
 
 from django.contrib.auth import get_user_model
-from django.db.models import Count, Exists, Min, OuterRef, Prefetch, Q, QuerySet, Subquery
+from django.db.models import (
+    BooleanField,
+    Case,
+    Count,
+    Exists,
+    Min,
+    OuterRef,
+    Prefetch,
+    Q,
+    QuerySet,
+    Subquery,
+    Value,
+    When,
+)
 
-from apps.accounts.roles import Role, has_role
+from apps.accounts.roles import Role, has_role, is_operational
 
 from .models import (
     Incident,
@@ -55,15 +74,77 @@ def technician_areas(user) -> QuerySet[SupportArea]:
     )
 
 
+def verification_areas(user) -> QuerySet[SupportArea]:
+    """
+    Áreas activas donde el usuario verifica conformidad: ``can_verify=True`` en una
+    cuenta operativa activa (ADR 0008). No exige el rol Planificador ni ``can_plan``.
+    Las cuentas sin rol operativo (solo administrativas, superusuarios o staff sin rol)
+    no verifican aunque tengan la pertenencia.
+    """
+    if not is_operational(user):
+        return SupportArea.objects.none()
+    return SupportArea.objects.filter(
+        is_active=True, memberships__user=user, memberships__can_verify=True
+    )
+
+
 def staff_area_ids(user) -> set[int]:
-    """Áreas donde el usuario tiene alguna función (Planificador o técnico)."""
+    """Áreas donde el usuario tiene alguna función (planificar, verificar o técnico)."""
     ids = set(planning_areas(user).values_list("id", flat=True))
+    ids.update(verification_areas(user).values_list("id", flat=True))
     ids.update(technician_areas(user).values_list("id", flat=True))
     return ids
 
 
 def can_plan_area(user, area: SupportArea) -> bool:
     return planning_areas(user).filter(pk=area.pk).exists()
+
+
+def can_verify_area(user, area: SupportArea) -> bool:
+    return verification_areas(user).filter(pk=area.pk).exists()
+
+
+def can_use_review_inbox(user) -> bool:
+    """
+    Puede abrir la bandeja del Planificador (endpoints existentes): por su rol
+    Planificador o por tener la función de verificar en algún área.
+    """
+    return has_role(user, Role.PLANIFICADOR) or verification_areas(user).exists()
+
+
+def effective_capabilities(user) -> dict[str, bool]:
+    """Funciones efectivas del usuario en alguna área, para que la interfaz se adapte."""
+    return {
+        "can_plan": planning_areas(user).exists(),
+        "can_attend": technician_areas(user).exists(),
+        "can_verify": verification_areas(user).exists(),
+    }
+
+
+def effective_area_functions(user) -> list[dict]:
+    """
+    Funciones efectivas por área activa (ADR 0009): solo las que el usuario puede
+    ejercer de verdad (con el rol o la cuenta operativa que cada una exige).
+    """
+    plan = set(planning_areas(user).values_list("code", flat=True))
+    attend = set(technician_areas(user).values_list("code", flat=True))
+    verify = set(verification_areas(user).values_list("code", flat=True))
+    codes = plan | attend | verify
+    return [
+        {
+            "area": area.code,
+            "area_name": area.name,
+            "can_plan": area.code in plan,
+            "can_attend": area.code in attend,
+            "can_verify": area.code in verify,
+        }
+        for area in SupportArea.objects.filter(code__in=codes).order_by("name")
+    ]
+
+
+def can_reopen_area(user, area: SupportArea) -> bool:
+    """Reabre un cierre No conforme quien planifica o verifica en el área."""
+    return can_plan_area(user, area) or can_verify_area(user, area)
 
 
 def can_view_area_inbox(user) -> bool:
@@ -83,6 +164,9 @@ def base_queryset() -> QuerySet[Incident]:
 
 
 def own_incidents(user) -> QuerySet[Incident]:
+    """Incidencias registradas por el usuario. Requiere una cuenta operativa activa."""
+    if not is_operational(user):
+        return Incident.objects.none()
     return base_queryset().filter(created_by=user)
 
 
@@ -93,7 +177,10 @@ def area_incidents(user) -> QuerySet[Incident]:
 
 def visible_incidents(user) -> QuerySet[Incident]:
     """Todo lo que el usuario puede ver en detalle: las propias y las de sus áreas."""
-    return base_queryset().filter(Q(created_by=user) | Q(support_area_id__in=staff_area_ids(user)))
+    visible = Q(support_area_id__in=staff_area_ids(user))
+    if is_operational(user):
+        visible |= Q(created_by=user)
+    return base_queryset().filter(visible)
 
 
 def current_assignment_prefetch() -> Prefetch:
@@ -106,13 +193,35 @@ def current_assignment_prefetch() -> Prefetch:
     )
 
 
+def pending_verification_expression():
+    """True si la incidencia está cerrada y su cierre vigente no tiene verificación."""
+    from .models import IncidentVerification
+
+    verified = IncidentVerification.objects.filter(
+        closing_intervention_id=OuterRef("closing_intervention_id")
+    )
+    return Case(
+        When(~Q(status=Incident.Status.CERRADA), then=Value(False)),
+        When(Exists(verified), then=Value(False)),
+        default=Value(True),
+        output_field=BooleanField(),
+    )
+
+
 def planning_incidents(user) -> QuerySet[Incident]:
-    """Bandeja del Planificador: solo las incidencias de sus áreas autorizadas."""
+    """
+    Bandeja del Planificador: todas las incidencias de las áreas que planifica y, de
+    las áreas donde solo verifica, las que tienen un cierre técnico vigente.
+    """
     return (
         base_queryset()
-        .filter(support_area__in=planning_areas(user))
+        .filter(
+            Q(support_area__in=planning_areas(user))
+            | Q(support_area__in=verification_areas(user), status=Incident.Status.CERRADA)
+        )
         .annotate(
-            has_attachments_flag=Exists(IncidentAttachment.objects.filter(incident=OuterRef("pk")))
+            has_attachments_flag=Exists(IncidentAttachment.objects.filter(incident=OuterRef("pk"))),
+            pending_verification_flag=pending_verification_expression(),
         )
         .prefetch_related(current_assignment_prefetch())
     )
@@ -224,6 +333,39 @@ def can_intervene(user, incident: Incident) -> bool:
         current is not None
         and current.technician_id == user.pk
         and is_assignable_technician(user, incident.support_area)
+    )
+
+
+def verifiable_by(queryset: QuerySet[Incident], user) -> QuerySet[Incident]:
+    """
+    Cierres pendientes que el usuario puede verificar: de sus áreas de verificación y
+    cuya intervención de cierre no ejecutó él.
+    """
+    return (
+        verification_queue(queryset)
+        .filter(support_area__in=verification_areas(user))
+        .exclude(closing_intervention__technician=user)
+    )
+
+
+def executed_closing_intervention(user, incident: Incident) -> bool:
+    """True si el usuario ejecutó la intervención que cerró técnicamente el ticket."""
+    if not incident.closing_intervention_id:
+        return False
+    return incident.closing_intervention.technician_id == user.pk
+
+
+def can_verify_closure(user, incident: Incident) -> bool:
+    """
+    Puede verificar el cierre vigente: función ``can_verify`` en el área, ticket
+    cerrado y sin haber ejecutado la intervención de cierre. No mira si ya hay una
+    verificación (eso lo controla el servicio).
+    """
+    return (
+        incident.status == Incident.Status.CERRADA
+        and incident.closing_intervention_id is not None
+        and can_verify_area(user, incident.support_area)
+        and not executed_closing_intervention(user, incident)
     )
 
 

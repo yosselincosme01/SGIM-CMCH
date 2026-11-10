@@ -59,10 +59,10 @@ describe('logotipo institucional en el login', () => {
 
 describe('logotipo institucional en las vistas internas', () => {
   it.each([
-    ['/solicitante', USERS.solicitante],
-    ['/administrador', USERS.administrador],
-    ['/planificador', USERS.multirol],
-    ['/personal-atencion', USERS.multirol],
+    ['/incidencias', USERS.solicitante],
+    ['/administracion', USERS.administrador],
+    ['/planificacion', USERS.multirol],
+    ['/atenciones', USERS.multirol],
   ])('%s usa la barra guinda con el logotipo de fondo guinda', async (route, user) => {
     backend.signIn(user)
     renderApp(route)
@@ -77,10 +77,10 @@ describe('logotipo institucional en las vistas internas', () => {
 
   it.each([
     ['/', USERS.multirol],
-    ['/solicitante', USERS.solicitante],
-    ['/administrador', USERS.administrador],
-    ['/planificador', USERS.multirol],
-    ['/personal-atencion', USERS.multirol],
+    ['/incidencias', USERS.solicitante],
+    ['/administracion', USERS.administrador],
+    ['/planificacion', USERS.multirol],
+    ['/atenciones', USERS.multirol],
   ])('%s: el logotipo está en el extremo izquierdo, antes del nombre SGIM-CMCH', async (route, user) => {
     backend.signIn(user)
     renderApp(route)
@@ -106,9 +106,9 @@ describe('logotipo institucional en las vistas internas', () => {
 
 describe('tokens y estilos de marca', () => {
   it('la cuadrícula de la barra ubica el logotipo a la izquierda en todos los tamaños', () => {
-    expect(css).toMatch(/grid-template-areas:\s*'logo identity controls'/)
-    expect(css).toMatch(/grid-template-areas:\s*'logo identity'\s*'controls controls'/)
-    expect(css).not.toMatch(/'identity controls logo'|'identity logo'/)
+    expect(css).toMatch(/grid-template-areas:\s*'logo identity toggle controls'/)
+    expect(css).toMatch(/grid-template-areas:\s*'logo identity toggle'\s*'controls controls controls'/)
+    expect(css).not.toMatch(/'toggle logo|'identity controls logo'|'identity logo'/)
   })
 
   it('el nombre del sistema se separa visualmente del logotipo', () => {

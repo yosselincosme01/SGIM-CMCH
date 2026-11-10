@@ -80,12 +80,14 @@ def make_user(db):
         areas: tuple[str, ...] = (),
         plans: tuple[str, ...] = (),
         assigned: tuple[str, ...] = (),
+        verifies: tuple[str, ...] = (),
         is_superuser: bool = False,
     ):
         """
         ``areas``: pertenencia sin funciones (no da acceso por sí sola).
         ``plans``: pertenencia con ``can_plan=True``.
         ``assigned``: pertenencia con ``can_be_assigned=True``.
+        ``verifies``: pertenencia con ``can_verify=True`` (independiente de ``plans``).
         """
         user = get_user_model().objects.create_user(
             username=username,
@@ -97,12 +99,13 @@ def make_user(db):
             is_staff=is_superuser,
         )
         user.groups.add(*Group.objects.filter(name__in=roles))
-        for code in {*areas, *plans, *assigned}:
+        for code in {*areas, *plans, *assigned, *verifies}:
             SupportAreaMembership.objects.create(
                 area=SupportArea.objects.get(code=code),
                 user=user,
                 can_plan=code in plans,
                 can_be_assigned=code in assigned,
+                can_verify=code in verifies,
             )
         return user
 

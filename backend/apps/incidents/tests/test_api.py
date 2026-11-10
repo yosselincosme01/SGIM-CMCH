@@ -59,10 +59,18 @@ def test_options_list_active_units_and_support_areas(client_for, solicitante, ca
     ]
 
 
-def test_options_require_solicitante_role(client_for, make_user):
-    planner = make_user("plan.prueba", Role.PLANIFICADOR)
+@pytest.mark.parametrize("role", [Role.PLANIFICADOR, Role.PERSONAL_ATENCION])
+def test_options_are_available_to_every_operational_role(client_for, make_user, role):
+    user = make_user("oper.prueba", role)
 
-    assert client_for(planner).get(OPTIONS_URL).status_code == status.HTTP_403_FORBIDDEN
+    assert client_for(user).get(OPTIONS_URL).status_code == status.HTTP_200_OK
+
+
+@pytest.mark.parametrize("roles", [(), (Role.ADMINISTRADOR,)])
+def test_options_require_an_operational_role(client_for, make_user, roles):
+    user = make_user("sin.oper", *roles)
+
+    assert client_for(user).get(OPTIONS_URL).status_code == status.HTTP_403_FORBIDDEN
 
 
 # --- Registro --------------------------------------------------------------
@@ -180,12 +188,14 @@ def test_oversized_attachment_is_rejected(client_for, solicitante, valid_payload
     assert "tamaño máximo" in response.json()["photo"][0]
 
 
-def test_only_solicitante_can_create(client_for, make_user, valid_payload):
-    planner = make_user("plan.prueba", Role.PLANIFICADOR, Role.PERSONAL_ATENCION)
+def test_any_operational_worker_can_create(client_for, make_user, valid_payload):
+    # ADR 0008: registrar incidencias es una función básica de toda cuenta operativa.
+    worker = make_user("plan.prueba", Role.PLANIFICADOR, Role.PERSONAL_ATENCION)
 
-    response = client_for(planner).post(LIST_URL, valid_payload, format="multipart")
+    response = client_for(worker).post(LIST_URL, valid_payload, format="multipart")
 
-    assert response.status_code == status.HTTP_403_FORBIDDEN
+    assert response.status_code == status.HTTP_201_CREATED
+    assert response.json()["created_by"]["username"] == "plan.prueba"
 
 
 def test_user_with_several_roles_including_solicitante_can_create(

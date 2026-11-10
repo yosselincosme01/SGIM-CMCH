@@ -4,7 +4,7 @@ import { formatBytes, formatDateTime } from './validation'
 
 /**
  * Secciones del detalle de una incidencia, compartidas por la vista del solicitante
- * y la del Planificador. El contenido depende de lo que envía el backend: el
+ * la del personal del área y la consulta del Administrador. El contenido depende de lo que envía el backend: el
  * solicitante nunca recibe datos internos de planificación.
  */
 export function IncidentSummaryCard({ incident }: { incident: IncidentDetail }) {

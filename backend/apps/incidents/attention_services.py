@@ -19,7 +19,6 @@ from .attachments import EvidenceImage
 from .models import Incident, IncidentEvent, IncidentIntervention, IncidentVerification
 from .planning_services import (
     PlanningConflict,
-    _check_planner,
     _lock,
     current_assignment_lock_queryset,
 )
@@ -38,6 +37,12 @@ TOO_MANY_PHOTOS = f"Puedes adjuntar hasta {PHOTOS_MAX} fotografías."
 NOT_CLOSED = "La incidencia no tiene un cierre técnico pendiente de verificar."
 ALREADY_VERIFIED = "Este cierre ya fue verificado."
 REOPEN_NOT_ALLOWED = "Solo se puede reabrir un cierre verificado como «No conforme»."
+NOT_VERIFIER = "No tienes la función de verificar conformidad en el área de esta incidencia."
+OWN_INTERVENTION = (
+    "No puedes verificar el cierre de una intervención que ejecutaste. "
+    "Debe verificarlo otra persona autorizada del área."
+)
+NOT_REOPENER = "Solo quien planifica o verifica en el área de esta incidencia puede reabrirla."
 
 
 def _required_text(value: str, field: str, label: str, errors: dict) -> str:
@@ -202,11 +207,20 @@ def register_intervention(
 
 @transaction.atomic
 def verify_closure(*, incident: Incident, actor, result: str, observations: str = ""):
-    """El Planificador del área registra Conforme o No conforme sobre el cierre vigente."""
+    """
+    Registra Conforme o No conforme sobre el cierre vigente (ADR 0008).
+
+    Requiere la función ``can_verify`` en el área (independiente de ``can_plan``) y que
+    el verificador no haya ejecutado la intervención de cierre, aunque tenga además
+    las funciones de planificar o de técnico.
+    """
     locked = _lock(incident)
-    _check_planner(actor, locked)
+    if not selectors.can_verify_area(actor, locked.support_area):
+        raise PermissionDenied(NOT_VERIFIER)
     if locked.status != Incident.Status.CERRADA or locked.closing_intervention_id is None:
         raise PlanningConflict(NOT_CLOSED)
+    if selectors.executed_closing_intervention(actor, locked):
+        raise PermissionDenied(OWN_INTERVENTION)
     if IncidentVerification.objects.filter(
         closing_intervention_id=locked.closing_intervention_id
     ).exists():
@@ -249,9 +263,12 @@ def reopen_incident(*, incident: Incident, actor, reason: str) -> Incident:
     """
     Reabre un cierre verificado como No conforme. Conserva el cierre y la verificación
     anteriores; el ticket mantiene su código y queda listo para una nueva programación.
+
+    Puede reabrir quien planifica o quien verifica en el área (ADR 0008).
     """
     locked = _lock(incident)
-    _check_planner(actor, locked)
+    if not selectors.can_reopen_area(actor, locked.support_area):
+        raise PermissionDenied(NOT_REOPENER)
     verification = (
         IncidentVerification.objects.filter(
             closing_intervention_id=locked.closing_intervention_id

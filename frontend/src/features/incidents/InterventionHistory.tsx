@@ -61,7 +61,14 @@ export function InterventionHistory({ interventions }: { interventions: Interven
                   </div>
                 )}
               </dl>
-              {item.photos.length > 0 && (
+              {item.photos === undefined && (item.photo_count ?? 0) > 0 && (
+                <p className="muted">
+                  {item.photo_count === 1
+                    ? '1 fotografía de evidencia (no disponible en esta consulta).'
+                    : `${item.photo_count} fotografías de evidencia (no disponibles en esta consulta).`}
+                </p>
+              )}
+              {item.photos && item.photos.length > 0 && (
                 <ul className="intervention__photos" aria-label="Evidencia de la intervención">
                   {item.photos.map((photo) => (
                     <li key={photo.id}>

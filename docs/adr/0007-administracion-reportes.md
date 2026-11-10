@@ -1,6 +1,7 @@
 # ADR 0007: Administración restringida, indicadores y reportes
 
 - **Estado:** propuesto. Implementado en `feature/admin-dashboards-reports`.
+- **Actualizado por:** [ADR 0008](0008-funciones-independientes-por-area.md). Verificar conformidad es una función propia (`can_verify`), separada de planificar y sin exigir el rol Planificador, y toda cuenta operativa registra incidencias. La navegación y la consulta global de incidencias del Administrador están en el [ADR 0009](0009-navegacion-por-capacidades.md).
 - **Fecha:** 2026-11-07
 - **Relacionado:** [ADR 0002](0002-autenticacion-y-roles.md) (roles),
   [ADR 0004](0004-planificacion.md) (funciones por área),

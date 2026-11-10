@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router'
 import { isApiError } from '../../shared/api/errors'
 import { formatDateTime } from '../../shared/dates'
 import { useDocumentTitle } from '../../shared/hooks/useDocumentTitle'
+import { PATHS } from '../../shared/paths'
 import { Alert } from '../../shared/ui/Alert'
 import { LoadingState } from '../../shared/ui/LoadingState'
 import { fetchIncident, type IncidentDetail } from '../incidents/api'
@@ -15,7 +16,6 @@ import {
 import { InterventionHistory } from '../incidents/InterventionHistory'
 import { StatusBadge } from '../incidents/StatusBadge'
 import { PriorityBadge } from '../planning/PlanningParts'
-import { ATTENTION_PATH } from './AttentionInboxPage'
 import { InterventionForm } from './InterventionForm'
 
 type LoadState = 'loading' | 'not-found' | 'ready' | { error: string }
@@ -56,7 +56,7 @@ export function AttentionDetailPage() {
               : ''}
         </Alert>
         <p>
-          <Link to={ATTENTION_PATH} className="btn btn--secondary">
+          <Link to={PATHS.attention} className="btn btn--secondary">
             Volver a la bandeja
           </Link>
         </p>
@@ -75,7 +75,7 @@ export function AttentionDetailPage() {
             <Link to="/">Inicio</Link>
           </li>
           <li>
-            <Link to={ATTENTION_PATH}>Personal de Atención</Link>
+            <Link to={PATHS.attention}>Mis atenciones</Link>
           </li>
           <li aria-current="page">{incident.code}</li>
         </ol>
@@ -116,7 +116,7 @@ export function AttentionDetailPage() {
                 </div>
                 {assignment.notes && (
                   <div>
-                    <dt>Indicaciones del Planificador</dt>
+                    <dt>Indicaciones del Responsable de Área</dt>
                     <dd className="preserve-lines">{assignment.notes}</dd>
                   </div>
                 )}
@@ -142,7 +142,7 @@ export function AttentionDetailPage() {
             <section className="planning-panel">
               <p className="muted">
                 {incident.status === 'cerrada'
-                  ? `Cerrada el ${incident.closure ? formatDateTime(incident.closure.closed_at) : ''}. No admite nuevas intervenciones salvo que el Planificador la reabra.`
+                  ? `Cerrada el ${incident.closure ? formatDateTime(incident.closure.closed_at) : ''}. No admite nuevas intervenciones salvo que el Responsable de Área la reabra.`
                   : 'No tienes una asignación vigente sobre esta incidencia.'}
               </p>
             </section>

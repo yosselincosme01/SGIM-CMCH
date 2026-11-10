@@ -1,38 +1,117 @@
-import { type ChangeEvent, useState } from 'react'
-import { Link, Outlet, useLocation, useNavigate } from 'react-router'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, Outlet, useLocation } from 'react-router'
 
+import { PATHS } from '../../shared/paths'
 import { Button } from '../../shared/ui/Button'
 import { InstitutionLogo } from '../../shared/ui/InstitutionLogo'
-import { findViewByPath, getAuthorizedViews } from '../auth/roles'
 import { useAuth, useCurrentUser } from '../auth/useAuth'
+import { activeItemPath, buildMenu, homePath } from '../navigation/access'
 import { SessionMonitor } from '../session/SessionMonitor'
 
-const HOME_VALUE = '/'
+// Igual que el punto de corte del CSS (styles/index.css).
+const MOBILE_QUERY = '(max-width: 56rem)'
+const COLLAPSED_KEY = 'sgim.sidebar.collapsed'
+
+function matchesMobile(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia(MOBILE_QUERY).matches
+}
+
+function readCollapsed(): boolean {
+  try {
+    return window.localStorage.getItem(COLLAPSED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function saveCollapsed(value: boolean) {
+  try {
+    window.localStorage.setItem(COLLAPSED_KEY, value ? '1' : '0')
+  } catch {
+    // Sin almacenamiento disponible: la preferencia dura solo esta sesión.
+  }
+}
+
+/** Sigue el ancho de pantalla: en móvil el menú es un panel que se abre y se cierra. */
+function useIsMobile(): boolean {
+  const [mobile, setMobile] = useState(matchesMobile)
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return
+    const query = window.matchMedia(MOBILE_QUERY)
+    const onChange = () => setMobile(query.matches)
+    query.addEventListener('change', onChange)
+    return () => query.removeEventListener('change', onChange)
+  }, [])
+  return mobile
+}
 
 /**
- * Layout común de las vistas autenticadas (Administrador, Solicitante, Planificador y
- * Personal de Atención): barra superior guinda con el logotipo institucional en
- * el extremo izquierdo, seguido de la identidad textual de SGIM-CMCH; a la derecha, el
- * selector de vista, el usuario y el cierre de sesión.
+ * Layout común de todas las páginas autenticadas (ADR 0009).
+ *
+ * - Encabezado guinda con el logotipo institucional, la identidad de SGIM-CMCH, el
+ *   acceso a "Mi cuenta" y el cierre de sesión.
+ * - Menú lateral único, construido con los permisos efectivos del usuario. No hay
+ *   selector de roles.
+ * - Escritorio: el menú se puede ocultar (la preferencia se recuerda en este equipo).
+ *   Móvil: el menú es un panel que se abre con el botón "Menú" y se cierra al elegir una
+ *   opción, con Escape o tocando fuera.
  */
 export function AppLayout() {
   const user = useCurrentUser()
   const { logout } = useAuth()
-  const navigate = useNavigate()
   const location = useLocation()
+  const mobile = useIsMobile()
+  const [collapsed, setCollapsed] = useState(readCollapsed)
+  // El panel móvil queda abierto solo en la ruta donde se abrió: al navegar, se cierra.
+  const [drawerPath, setDrawerPath] = useState<string | null>(null)
+  const drawerOpen = drawerPath === location.pathname
   const [signingOut, setSigningOut] = useState(false)
+  const toggleRef = useRef<HTMLButtonElement>(null)
+  const sidebarRef = useRef<HTMLElement>(null)
 
-  const views = getAuthorizedViews(user)
-  const current = findViewByPath(location.pathname)
+  const menu = buildMenu(user)
+  const active = activeItemPath(menu, location.pathname)
+  const sidebarVisible = mobile ? drawerOpen : !collapsed
 
-  function handleViewChange(event: ChangeEvent<HTMLSelectElement>) {
-    navigate(event.target.value)
+  const closeDrawer = useCallback((returnFocus: boolean) => {
+    setDrawerPath(null)
+    if (returnFocus) toggleRef.current?.focus()
+  }, [])
+
+  // Al abrir el panel móvil, el foco pasa a la primera opción; Escape lo cierra.
+  useEffect(() => {
+    if (!mobile || !drawerOpen) return
+    sidebarRef.current?.querySelector<HTMLElement>('a')?.focus()
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') closeDrawer(true)
+    }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [mobile, drawerOpen, closeDrawer])
+
+  function toggleMenu() {
+    if (mobile) {
+      setDrawerPath(drawerOpen ? null : location.pathname)
+      return
+    }
+    setCollapsed((value) => {
+      saveCollapsed(!value)
+      return !value
+    })
   }
 
   async function handleLogout() {
     setSigningOut(true)
     await logout()
   }
+
+  const shellClass = [
+    'shell',
+    !mobile && collapsed ? 'shell--collapsed' : '',
+    mobile && drawerOpen ? 'shell--drawer-open' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
 
   return (
     <SessionMonitor>
@@ -41,44 +120,43 @@ export function AppLayout() {
       </a>
       <header className="topbar">
         <div className="topbar__inner">
+
           {/* Logotipo institucional en el extremo izquierdo, en todas las vistas internas. */}
           <div className="topbar__logo" data-testid="topbar-brand">
             <InstitutionLogo variant="on-guinda" />
           </div>
 
-          <Link to="/" className="topbar__identity" aria-label="SGIM-CMCH, ir al inicio">
+          <Link to={homePath(user)} className="topbar__identity" aria-label="SGIM-CMCH, ir al inicio">
             <span className="topbar__name">SGIM-CMCH</span>
             <span className="topbar__tagline">
               Sistema de Gestión de Incidencias y Mantenimiento
             </span>
           </Link>
 
-          <div className="topbar__controls">
-            {views.length > 1 && (
-              <div className="view-switcher">
-                <label htmlFor="view-switcher" className="view-switcher__label">
-                  Vista
-                </label>
-                <select
-                  id="view-switcher"
-                  className="view-switcher__select"
-                  value={current?.path ?? HOME_VALUE}
-                  onChange={handleViewChange}
-                >
-                  <option value={HOME_VALUE}>Inicio</option>
-                  {views.map((view) => (
-                    <option key={view.role} value={view.path}>
-                      {view.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+          <button
+            ref={toggleRef}
+            type="button"
+            className="menu-toggle"
+            aria-controls="menu-principal"
+            aria-expanded={sidebarVisible}
+            onClick={toggleMenu}
+          >
+            <span className="menu-toggle__icon" aria-hidden="true" />
+            <span className="menu-toggle__label">
+              {sidebarVisible ? 'Ocultar menú' : mobile ? 'Menú' : 'Mostrar menú'}
+            </span>
+          </button>
 
+          <div className="topbar__controls">
             <div className="user-menu">
-              <span className="user-menu__name" title={user.username}>
+              <Link
+                to={PATHS.account}
+                className="user-menu__name"
+                title={user.username}
+                aria-label={`Mi cuenta: ${user.full_name}`}
+              >
                 {user.full_name}
-              </span>
+              </Link>
               <Button
                 variant="ghost"
                 onClick={handleLogout}
@@ -92,9 +170,46 @@ export function AppLayout() {
         </div>
       </header>
 
-      <main className="page" id="contenido" tabIndex={-1}>
-        <Outlet />
-      </main>
+      <div className={shellClass}>
+        <nav
+          id="menu-principal"
+          ref={sidebarRef}
+          className="sidebar"
+          aria-label="Menú principal"
+          hidden={!sidebarVisible}
+        >
+          {menu.map((group) => (
+            <section key={group.id} className="sidebar__group" aria-labelledby={`menu-${group.id}`}>
+              <h2 id={`menu-${group.id}`} className="sidebar__title">
+                {group.label}
+              </h2>
+              <ul className="sidebar__list">
+                {group.items.map((item) => (
+                  <li key={item.path}>
+                    <Link
+                      to={item.path}
+                      className={
+                        item.path === active ? 'sidebar__link sidebar__link--active' : 'sidebar__link'
+                      }
+                      aria-current={item.path === active ? 'page' : undefined}
+                    >
+                      {item.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </nav>
+
+        {mobile && drawerOpen && (
+          <div className="sidebar-backdrop" aria-hidden="true" onClick={() => closeDrawer(true)} />
+        )}
+
+        <main className="page" id="contenido" tabIndex={-1}>
+          <Outlet />
+        </main>
+      </div>
 
       <footer className="footer">
         <p>SGIM-CMCH · Uso exclusivo del personal autorizado. Tu cuenta es personal.</p>

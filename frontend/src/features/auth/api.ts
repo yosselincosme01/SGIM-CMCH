@@ -14,6 +14,25 @@ export interface CurrentUser {
   full_name: string
   email: string
   roles: string[]
+  /**
+   * Funciones efectivas en alguna área (ADR 0008). Solo adaptan la interfaz: el
+   * backend valida cada acción con el área concreta.
+   */
+  capabilities?: {
+    can_plan: boolean
+    can_attend: boolean
+    can_verify: boolean
+  }
+  /** Funciones efectivas por área activa (ADR 0009). */
+  area_functions?: AreaFunction[]
+}
+
+export interface AreaFunction {
+  area: string
+  area_name: string
+  can_plan: boolean
+  can_attend: boolean
+  can_verify: boolean
 }
 
 export interface SessionStatus {

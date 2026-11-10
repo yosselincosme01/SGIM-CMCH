@@ -7,7 +7,7 @@ from .models import AuditLog
 from .user_services import MANAGED_ROLES, is_protected_account, open_assignment_areas
 
 ROLE_LABELS = dict(Role.choices) | {
-    Role.PLANIFICADOR: "Planificador",
+    Role.PLANIFICADOR: "Responsable de Área",
     Role.PERSONAL_ATENCION: "Personal de Atención",
 }
 
@@ -39,6 +39,7 @@ class AdminUserSerializer(serializers.Serializer):
                 "area_name": m.area.name,
                 "can_plan": m.can_plan,
                 "can_be_assigned": m.can_be_assigned,
+                "can_verify": m.can_verify,
             }
             for m in SupportAreaMembership.objects.filter(user=user)
             .select_related("area")
@@ -66,6 +67,7 @@ class MembershipInputSerializer(_StrictSerializer):
     area = serializers.CharField(max_length=40)
     can_plan = serializers.BooleanField(default=False)
     can_be_assigned = serializers.BooleanField(default=False)
+    can_verify = serializers.BooleanField(default=False)
 
 
 def _roles_field(**kwargs):
@@ -140,5 +142,9 @@ def admin_options() -> dict:
         "areas": [
             {"code": area.code, "name": area.name}
             for area in SupportArea.objects.filter(is_active=True).order_by("name")
+        ],
+        # Acciones registradas en la auditoría, para filtrar su consulta (ADR 0009).
+        "audit_actions": [
+            {"code": code, "label": label} for code, label in AuditLog.Action.choices
         ],
     }

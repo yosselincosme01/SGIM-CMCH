@@ -23,7 +23,7 @@ class MembershipInline(admin.TabularInline):
     model = SupportAreaMembership
     extra = 0
     autocomplete_fields = ("user",)
-    fields = ("user", "can_plan", "can_be_assigned", "created_at")
+    fields = ("user", "can_plan", "can_be_assigned", "can_verify", "created_at")
     readonly_fields = ("created_at",)
 
 
@@ -40,8 +40,8 @@ class SupportAreaAdmin(admin.ModelAdmin):
 class SupportAreaMembershipAdmin(admin.ModelAdmin):
     """Vista de control: quién planifica y quién atiende en cada área."""
 
-    list_display = ("user", "area", "can_plan", "can_be_assigned", "created_at")
-    list_filter = ("area", "can_plan", "can_be_assigned")
+    list_display = ("user", "area", "can_plan", "can_be_assigned", "can_verify", "created_at")
+    list_filter = ("area", "can_plan", "can_be_assigned", "can_verify")
     search_fields = ("user__username", "user__first_name", "user__last_name")
     autocomplete_fields = ("user",)
 

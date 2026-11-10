@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll } from 'vitest'
 import { adminBackend } from './fakeAdmin'
 import { attentionBackend } from './fakeAttention'
 import { backend } from './fakeBackend'
+import { homeBackend } from './fakeHome'
 import { incidentsBackend } from './fakeIncidents'
 import { planningBackend } from './fakePlanning'
 import { server } from './server'
@@ -31,6 +32,7 @@ afterEach(() => {
   planningBackend.reset()
   attentionBackend.reset()
   adminBackend.reset()
+  homeBackend.reset()
   clearCookies()
   localStorage.clear()
   sessionStorage.clear()

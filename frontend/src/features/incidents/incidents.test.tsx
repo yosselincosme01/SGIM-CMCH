@@ -15,7 +15,7 @@ function signInSolicitante() {
 
 async function openForm() {
   signInSolicitante()
-  const utils = renderApp('/solicitante/incidencias/nueva')
+  const utils = renderApp('/incidencias/nueva')
   await screen.findByRole('heading', { name: 'Registrar incidencia' })
   return utils
 }
@@ -35,24 +35,35 @@ function photo(name: string, type: string, size = 1024) {
   return new File([new Uint8Array(size)], name, { type })
 }
 
-describe('vista Solicitante', () => {
-  it('ofrece registrar y consultar incidencias', async () => {
+describe('registro y consulta de incidencias propias', () => {
+  it('el menú ofrece registrar y consultar incidencias', async () => {
     signInSolicitante()
-    renderApp('/solicitante')
+    renderApp('/')
 
-    expect(await screen.findByRole('link', { name: /Registrar incidencia/ })).toHaveAttribute(
+    const shortcuts = await screen.findByRole('navigation', { name: 'Menú principal' })
+    expect(within(shortcuts).getByRole('link', { name: /Registrar incidencia/ })).toHaveAttribute(
       'href',
-      '/solicitante/incidencias/nueva',
+      '/incidencias/nueva',
     )
-    expect(screen.getByRole('link', { name: /Mis incidencias/ })).toHaveAttribute(
+    expect(within(shortcuts).getByRole('link', { name: /Mis incidencias/ })).toHaveAttribute(
       'href',
-      '/solicitante/incidencias',
+      '/incidencias',
     )
   })
 
-  it('sin el rol solicitante, el formulario no está disponible', async () => {
-    backend.signIn(USERS.multirol) // planificador + personal_atencion
-    renderApp('/solicitante/incidencias/nueva')
+  it('todo rol operativo puede abrir el formulario de registro (ADR 0008)', async () => {
+    backend.signIn(USERS.tecnico) // solo personal_atencion
+    renderApp('/incidencias/nueva')
+
+    expect(await screen.findByRole('heading', { name: 'Registrar incidencia' })).toBeInTheDocument()
+  })
+
+  it.each([
+    ['administrador', USERS.administrador],
+    ['sin roles', USERS.sinRoles],
+  ])('una cuenta %s no registra incidencias', async (_label, account) => {
+    backend.signIn(account)
+    renderApp('/incidencias/nueva')
 
     expect(
       await screen.findByRole('heading', { name: 'No tienes acceso a esta vista' }),
@@ -248,7 +259,7 @@ describe('mis incidencias', () => {
     incidentsBackend.seed('otro.usuario')
     incidentsBackend.seed(USERS.solicitante.username)
     signInSolicitante()
-    renderApp('/solicitante/incidencias')
+    renderApp('/incidencias')
 
     const table = await screen.findByRole('table')
     const codes = within(table)
@@ -261,7 +272,7 @@ describe('mis incidencias', () => {
 
   it('muestra un estado vacío si no hay incidencias', async () => {
     signInSolicitante()
-    renderApp('/solicitante/incidencias')
+    renderApp('/incidencias')
 
     expect(
       await screen.findByRole('heading', { name: 'Todavía no registraste incidencias' }),
@@ -276,7 +287,7 @@ describe('mis incidencias', () => {
       qr_code: 'DEMO-PC-07',
     })
     signInSolicitante()
-    renderApp('/solicitante/incidencias/inc-2026-000001')
+    renderApp('/incidencias/inc-2026-000001')
 
     expect(await screen.findByRole('heading', { name: 'INC-2026-000001' })).toBeInTheDocument()
     expect(screen.getByText('Se reinició el equipo.')).toBeInTheDocument()
@@ -288,7 +299,7 @@ describe('mis incidencias', () => {
   it('una incidencia ajena o inexistente se informa como no encontrada', async () => {
     incidentsBackend.seed('otro.usuario')
     signInSolicitante()
-    renderApp('/solicitante/incidencias/INC-2026-000001')
+    renderApp('/incidencias/INC-2026-000001')
 
     expect(await screen.findByText('No encontramos esta incidencia')).toBeInTheDocument()
     await waitFor(() =>

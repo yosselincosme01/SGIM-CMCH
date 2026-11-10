@@ -9,7 +9,7 @@ export const PHOTOS_MAX = 5
 export const RESULTS: { value: InterventionResult; label: string; hint: string }[] = [
   { value: 'solved', label: 'Solucionado', hint: 'La incidencia se cerrará y quedará pendiente de verificación.' },
   { value: 'in_progress', label: 'En proceso', hint: 'Seguirá abierta; podrás registrar otra intervención.' },
-  { value: 'not_solved', label: 'No solucionado', hint: 'Seguirá abierta; el Planificador verá el pendiente.' },
+  { value: 'not_solved', label: 'No solucionado', hint: 'Seguirá abierta; el Responsable de Área verá el pendiente.' },
 ]
 
 export type Field =

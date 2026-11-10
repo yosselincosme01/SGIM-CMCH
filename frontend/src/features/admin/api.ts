@@ -4,16 +4,27 @@
  * protegidas aunque la solicitud se manipule.
  */
 import { apiRequest } from '../../shared/api/client'
-import type { Page } from '../incidents/api'
+import type { IncidentDetail, Page } from '../incidents/api'
+import type { PlanningItem } from '../planning/api'
 
 export type ManagedRole = 'solicitante' | 'planificador' | 'personal_atencion'
 
+/**
+ * Funciones de una persona en un área (ADR 0008). Son independientes entre sí:
+ * planificar no implica verificar, ni al revés.
+ */
 export interface Membership {
   area: string
   area_name?: string
+  /** Planificar atenciones (requiere el rol Planificador). */
   can_plan: boolean
+  /** Recibir asignaciones y registrar atenciones (requiere Personal de Atención). */
   can_be_assigned: boolean
+  /** Verificar conformidad de los cierres técnicos (requiere el rol Planificador). */
+  can_verify: boolean
 }
+
+export type AreaFunction = 'can_plan' | 'can_be_assigned' | 'can_verify'
 
 export interface AdminUser {
   id: number
@@ -35,6 +46,8 @@ export interface AdminUser {
 export interface AdminOptions {
   roles: { code: ManagedRole; label: string }[]
   areas: { code: string; name: string }[]
+  /** Acciones registradas en la auditoría (ADR 0009). */
+  audit_actions?: { code: string; label: string }[]
 }
 
 export interface UserFilters {
@@ -98,4 +111,67 @@ export function resetUserPassword(id: number, password: string, passwordConfirm:
     method: 'POST',
     body: { password, password_confirm: passwordConfirm },
   })
+}
+
+function query(filters: object): string {
+  const params = new URLSearchParams()
+  for (const [key, value] of Object.entries(filters)) {
+    if (value !== undefined && value !== '' && !(key === 'page' && value === 1)) {
+      params.set(key, String(value))
+    }
+  }
+  const text = params.toString()
+  return text ? `?${text}` : ''
+}
+
+// --- Consulta global de incidencias (solo lectura, sin evidencia; ADR 0009) ----------
+
+export interface GlobalIncidentFilters {
+  area?: string
+  status?: string
+  priority?: string
+  q?: string
+  /** Fecha de registro (AAAA-MM-DD, hora de Lima). */
+  date_from?: string
+  date_to?: string
+  page?: number
+}
+
+export function fetchGlobalIncidents(filters: GlobalIncidentFilters, signal?: AbortSignal) {
+  return apiRequest<Page<PlanningItem>>(`/admin/incidents/${query(filters)}`, { signal })
+}
+
+/** Detalle sin ``attachments`` ni ``permissions``: solo el número de fotografías. */
+export type GlobalIncidentDetail = Omit<IncidentDetail, 'attachments' | 'permissions'> & {
+  attachment_count: number
+}
+
+const CODE = /^[A-Za-z0-9-]{3,20}$/
+
+export function fetchGlobalIncident(code: string, signal?: AbortSignal) {
+  if (!CODE.test(code)) throw new Error('Código de incidencia no válido.')
+  return apiRequest<GlobalIncidentDetail>(`/admin/incidents/${encodeURIComponent(code)}/`, {
+    signal,
+  })
+}
+
+// --- Auditoría ---------------------------------------------------------------------
+
+export interface AuditEntry {
+  id: number
+  action: string
+  action_label: string
+  actor: string
+  target_user: string | null
+  details: Record<string, unknown>
+  created_at: string
+}
+
+export interface AuditFilters {
+  action?: string
+  page?: number
+}
+
+export function fetchAudit(filters: AuditFilters, signal?: AbortSignal) {
+  return apiRequest<Page<AuditEntry>>(`/admin/audit/${query(filters)}`, { signal })
 }

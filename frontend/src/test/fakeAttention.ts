@@ -43,6 +43,12 @@ function guard(role: string): Response | null {
   return null
 }
 
+/** Verificar y reabrir: rol Planificador o función de verificar (ADR 0008). */
+function verifierGuard(): Response | null {
+  if (backend.sessionUser?.capabilities?.can_verify && !backend.networkDown) return null
+  return guard('planificador')
+}
+
 function csrfFailed(request: Request) {
   return request.headers.get('X-CSRFToken') !== backend.csrfToken
 }
@@ -96,7 +102,7 @@ export const attentionHandlers = [
   }),
 
   http.post(`${API}/incidents/:code/verification/`, async ({ request, params }) => {
-    const blocked = guard('planificador')
+    const blocked = verifierGuard()
     if (blocked) return blocked
     if (csrfFailed(request)) return HttpResponse.json({ detail: 'CSRF Failed.' }, { status: 403 })
     const incident = find(params.code)
@@ -127,7 +133,7 @@ export const attentionHandlers = [
   }),
 
   http.post(`${API}/incidents/:code/reopen/`, async ({ request, params }) => {
-    const blocked = guard('planificador')
+    const blocked = verifierGuard()
     if (blocked) return blocked
     if (csrfFailed(request)) return HttpResponse.json({ detail: 'CSRF Failed.' }, { status: 403 })
     const incident = find(params.code)

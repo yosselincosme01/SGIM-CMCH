@@ -9,10 +9,12 @@ import { Button } from '../../shared/ui/Button'
 import { Dialog } from '../../shared/ui/Dialog'
 import { LoadingState } from '../../shared/ui/LoadingState'
 import { TextField } from '../../shared/ui/TextField'
-import { ADMIN_PATH, AdminBreadcrumb } from './AdminDashboardPage'
+import { adminUserPath, PATHS } from '../../shared/paths'
+import { AdminBreadcrumb } from './AdminDashboardPage'
 import {
   type AdminOptions,
   type AdminUser,
+  type AreaFunction,
   createUser,
   fetchAdminOptions,
   fetchUser,
@@ -140,6 +142,7 @@ export function UserFormPage() {
           ...m,
           can_plan: m.can_plan && roles.includes('planificador'),
           can_be_assigned: m.can_be_assigned && roles.includes('personal_atencion'),
+          can_verify: m.can_verify && roles.length > 0,
         },
       ]),
     )
@@ -147,8 +150,13 @@ export function UserFormPage() {
     setErrors({})
   }
 
-  function toggleArea(code: string, field: 'can_plan' | 'can_be_assigned') {
-    const current = form.memberships[code] ?? { area: code, can_plan: false, can_be_assigned: false }
+  function toggleArea(code: string, field: AreaFunction) {
+    const current = form.memberships[code] ?? {
+      area: code,
+      can_plan: false,
+      can_be_assigned: false,
+      can_verify: false,
+    }
     set('memberships', { ...form.memberships, [code]: { ...current, [field]: !current[field] } })
   }
 
@@ -172,8 +180,13 @@ export function UserFormPage() {
     setSaving(true)
     setNotice(null)
     const memberships = Object.values(form.memberships)
-      .filter((m) => m.can_plan || m.can_be_assigned)
-      .map(({ area, can_plan, can_be_assigned }) => ({ area, can_plan, can_be_assigned }))
+      .filter((m) => m.can_plan || m.can_be_assigned || m.can_verify)
+      .map(({ area, can_plan, can_be_assigned, can_verify }) => ({
+        area,
+        can_plan,
+        can_be_assigned,
+        can_verify: Boolean(can_verify),
+      }))
     try {
       if (userId) {
         const updated = await updateUser(userId, {
@@ -188,7 +201,7 @@ export function UserFormPage() {
         setNotice('Cambios guardados y registrados en la auditoría.')
       } else {
         const created = await createUser({ ...form, memberships })
-        navigate(`${ADMIN_PATH}/usuarios/${created.id}`, { replace: true })
+        navigate(adminUserPath(created.id), { replace: true })
       }
     } catch (error) {
       setErrors(errorsFrom(error))
@@ -233,7 +246,7 @@ export function UserFormPage() {
     <div className="stack" inert={confirm !== null} aria-hidden={confirm !== null || undefined}>
       <AdminBreadcrumb current={userId ? (user?.username ?? 'Usuario') : 'Nuevo usuario'} />
       <header className="page__header">
-        <p className="page__eyebrow">Administrador · Usuarios</p>
+        <p className="page__eyebrow">Administración · Usuarios y permisos</p>
         <h1 className="page__title">{userId ? user?.full_name : 'Nuevo usuario'}</h1>
         {user && (
           <p className="page__lead">
@@ -306,8 +319,9 @@ export function UserFormPage() {
         <fieldset className="form-section" disabled={readOnly}>
           <legend className="form-section__title">Autorizaciones por área</legend>
           <p className="field__hint">
-            Planificar requiere el rol Planificador; recibir asignaciones requiere Personal de
-            Atención.
+            Cada autorización es independiente y vale solo para su área. Planificar atenciones
+            requiere el rol Responsable de Área; registrar atenciones, Personal de Atención; verificar
+            conformidad, cualquier rol. Nadie verifica un cierre de una atención que realizó.
           </p>
           <ul className="area-auth-list">
             {options.areas.map((area) => {
@@ -321,9 +335,9 @@ export function UserFormPage() {
                       checked={Boolean(current?.can_plan)}
                       disabled={!form.roles.includes('planificador')}
                       onChange={() => toggleArea(area.code, 'can_plan')}
-                      aria-label={`Planificar en ${area.name}`}
+                      aria-label={`Planificar atenciones en ${area.name}`}
                     />
-                    <span>Planificar</span>
+                    <span>Planificar atenciones</span>
                   </label>
                   <label className="reason-option">
                     <input
@@ -331,9 +345,19 @@ export function UserFormPage() {
                       checked={Boolean(current?.can_be_assigned)}
                       disabled={!form.roles.includes('personal_atencion')}
                       onChange={() => toggleArea(area.code, 'can_be_assigned')}
-                      aria-label={`Recibir asignaciones en ${area.name}`}
+                      aria-label={`Registrar atenciones en ${area.name}`}
                     />
-                    <span>Recibir asignaciones</span>
+                    <span>Registrar atenciones</span>
+                  </label>
+                  <label className="reason-option">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(current?.can_verify)}
+                      disabled={form.roles.length === 0}
+                      onChange={() => toggleArea(area.code, 'can_verify')}
+                      aria-label={`Verificar conformidad en ${area.name}`}
+                    />
+                    <span>Verificar conformidad</span>
                   </label>
                 </li>
               )
@@ -350,7 +374,7 @@ export function UserFormPage() {
 
         {!readOnly && (
           <div className="form-actions">
-            <Link to={`${ADMIN_PATH}/usuarios`} className="btn btn--ghost">
+            <Link to={PATHS.adminUsers} className="btn btn--ghost">
               Volver
             </Link>
             <Button type="submit" loading={saving} loadingText="Guardando…">

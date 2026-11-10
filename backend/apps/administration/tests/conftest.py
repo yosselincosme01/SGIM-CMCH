@@ -33,6 +33,7 @@ def make_user(db):
         *roles,
         plans=(),
         assigned=(),
+        verifies=(),
         is_superuser=False,
         is_staff=False,
         is_active=True,
@@ -48,12 +49,13 @@ def make_user(db):
             is_active=is_active,
         )
         user.groups.add(*Group.objects.filter(name__in=roles))
-        for code in {*plans, *assigned}:
+        for code in {*plans, *assigned, *verifies}:
             SupportAreaMembership.objects.create(
                 area=SupportArea.objects.get(code=code),
                 user=user,
                 can_plan=code in plans,
                 can_be_assigned=code in assigned,
+                can_verify=code in verifies,
             )
         return user
 
@@ -88,7 +90,7 @@ class Builder:
     def __init__(self, make_user):
         self.requester = make_user("sol.prueba", Role.SOLICITANTE)
         self.planners = {
-            code: make_user(f"plan.{code}", Role.PLANIFICADOR, plans=(code,))
+            code: make_user(f"plan.{code}", Role.PLANIFICADOR, plans=(code,), verifies=(code,))
             for code in ("ti", "mantenimiento")
         }
         self.techs = {

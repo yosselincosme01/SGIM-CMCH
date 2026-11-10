@@ -35,9 +35,12 @@ function hours(value: number | null): string {
 
 /**
  * Indicadores y centro de reportes, compartidos por el Administrador (todas las áreas)
- * y el Planificador (sus áreas). El alcance lo aplica el backend.
+ * y el Responsable de Área (sus áreas). El alcance lo aplica el backend.
+ *
+ * ``mode``: ``indicators`` muestra los indicadores; ``reports``, la descarga de reportes
+ * Excel. Ambos usan los mismos filtros.
  */
-export function MetricsPanel() {
+export function MetricsPanel({ mode }: { mode: 'indicators' | 'reports' }) {
   const [options, setOptions] = useState<ReportOptions | null>(null)
   const [filters, setFilters] = useState<MetricFilters>({
     date_from: daysAgo(29),
@@ -62,6 +65,7 @@ export function MetricsPanel() {
   }, [])
 
   useEffect(() => {
+    if (mode !== 'indicators') return
     const controller = new AbortController()
     fetchDashboard(applied, controller.signal)
       .then((data) => {
@@ -73,7 +77,7 @@ export function MetricsPanel() {
         setError(isApiError(err) ? err.message : 'No se pudieron calcular los indicadores.')
       })
     return () => controller.abort()
-  }, [applied])
+  }, [applied, mode])
 
   function apply(event: FormEvent) {
     event.preventDefault()
@@ -113,7 +117,11 @@ export function MetricsPanel() {
 
   return (
     <div className="stack">
-      <form className="filters filters--inline" onSubmit={apply} aria-label="Filtros de indicadores">
+      <form
+        className="filters filters--inline"
+        onSubmit={apply}
+        aria-label={mode === 'reports' ? 'Filtros de reportes' : 'Filtros de indicadores'}
+      >
         <p className="muted">
           Alcance: <strong>{scopeLabel}</strong>. Incidencias registradas en el rango (hora de
           Lima), hasta {options.max_range_days} días.
@@ -190,7 +198,7 @@ export function MetricsPanel() {
         </Alert>
       )}
 
-      {!dashboard ? (
+      {mode === 'reports' ? null : !dashboard ? (
         <LoadingState label="Calculando indicadores…" />
       ) : (
         <>
@@ -245,6 +253,7 @@ export function MetricsPanel() {
         </>
       )}
 
+      {mode === 'reports' && (
       <section className="detail-card" aria-labelledby="reports-title">
         <h2 id="reports-title" className="detail-card__title">
           Reportes Excel
@@ -276,6 +285,7 @@ export function MetricsPanel() {
           ))}
         </ul>
       </section>
+      )}
     </div>
   )
 }

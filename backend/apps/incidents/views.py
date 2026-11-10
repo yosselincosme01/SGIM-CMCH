@@ -10,15 +10,15 @@ from django.utils import timezone
 from rest_framework import generics, serializers, status
 from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.parsers import JSONParser, MultiPartParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.permissions import IsPersonalAtencion, IsPlanificador, IsSolicitante
+from apps.accounts.permissions import IsOperationalUser, IsPersonalAtencion, IsPlanificador
 from apps.catalogs.models import CareUnit
 
-from . import attention_services, planning_services, selectors, services
+from . import attention_services, home, planning_services, selectors, services
 from .models import Incident, PriorityLevel, SupportArea
 from .serializers import (
     AttentionListSerializer,
@@ -42,6 +42,16 @@ from .serializers import (
 
 def _normalize_code(code: str) -> str:
     return code.strip().upper()
+
+
+class CanUseReviewInbox(BasePermission):
+    """
+    Bandeja del Planificador: rol Planificador o función de verificar en algún área
+    (ADR 0008). Lo que ve cada uno lo filtran los selectores por área y función.
+    """
+
+    def has_permission(self, request, view) -> bool:
+        return selectors.can_use_review_inbox(request.user)
 
 
 class Conflict(APIException):
@@ -89,13 +99,28 @@ def _to_drf_validation(exc: DjangoValidationError) -> serializers.ValidationErro
     return serializers.ValidationError({"non_field_errors": exc.messages})
 
 
+# --- Inicio -----------------------------------------------------------------------
+
+
+class HomeSummaryView(APIView):
+    """
+    Resumen del Inicio (ADR 0010): indicadores y pendientes según las capacidades
+    efectivas y las áreas autorizadas. Solo lectura.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request: Request) -> Response:
+        return Response(home.build_summary(request.user))
+
+
 # --- Registro y consulta ---------------------------------------------------------
 
 
 class IncidentOptionsView(APIView):
     """Opciones del formulario de registro: UPS/servicios y áreas de soporte activas."""
 
-    permission_classes = [IsAuthenticated, IsSolicitante]
+    permission_classes = [IsAuthenticated, IsOperationalUser]
 
     def get(self, request: Request) -> Response:
         return Response(
@@ -114,8 +139,9 @@ class IncidentListCreateView(generics.ListAPIView):
     """
     GET  /incidents/?scope=mine   Incidencias registradas por el usuario (por defecto).
     GET  /incidents/?scope=area   Incidencias de las áreas donde el usuario tiene una
-                                  función autorizada (Planificador o técnico).
-    POST /incidents/              Registro (multipart; solo rol solicitante).
+                                  función autorizada (planificar, verificar o técnico).
+    POST /incidents/              Registro (multipart). Cualquier cuenta operativa activa
+                                  (ADR 0008); no las cuentas solo administrativas.
     """
 
     serializer_class = IncidentListSerializer
@@ -123,7 +149,7 @@ class IncidentListCreateView(generics.ListAPIView):
 
     def get_permissions(self):
         if self.request.method == "POST":
-            return [IsAuthenticated(), IsSolicitante()]
+            return [IsAuthenticated(), IsOperationalUser()]
         return [IsAuthenticated()]
 
     def get_queryset(self):
@@ -191,19 +217,32 @@ def _lima_day_range(day: date) -> tuple[datetime, datetime]:
 
 
 class PlanningOptionsView(APIView):
-    """Áreas que el usuario planifica, niveles de prioridad provisionales y contadores."""
+    """Áreas que el usuario planifica o verifica, niveles de prioridad y contadores."""
 
-    permission_classes = [IsAuthenticated, IsPlanificador]
+    permission_classes = [IsAuthenticated, CanUseReviewInbox]
 
     def get(self, request: Request) -> Response:
-        areas = selectors.planning_areas(request.user).order_by("name")
-        inbox = selectors.planning_incidents(request.user)
+        user = request.user
+        plan_ids = set(selectors.planning_areas(user).values_list("id", flat=True))
+        verify_ids = set(selectors.verification_areas(user).values_list("id", flat=True))
+        areas = SupportArea.objects.filter(pk__in=plan_ids | verify_ids).order_by("name")
+        inbox = selectors.planning_incidents(user)
+        planned = inbox.filter(support_area_id__in=plan_ids)
         today = timezone.localtime(timezone=display_time_zone()).date()
         today_start, today_end = _lima_day_range(today)
-        open_inbox = inbox.filter(status__in=selectors.PLANNABLE_STATUSES)
+        open_inbox = planned.filter(status__in=selectors.PLANNABLE_STATUSES)
         return Response(
             {
                 "areas": SupportAreaOptionSerializer(areas, many=True).data,
+                # Funciones del usuario en cada área (ADR 0008): independientes entre sí.
+                "functions": [
+                    {
+                        "area": area.code,
+                        "can_plan": area.pk in plan_ids,
+                        "can_verify": area.pk in verify_ids,
+                    }
+                    for area in areas
+                ],
                 "priorities": PriorityLevelSerializer(
                     PriorityLevel.objects.filter(is_active=True), many=True
                 ).data,
@@ -213,10 +252,12 @@ class PlanningOptionsView(APIView):
                         status__in=[Incident.Status.REGISTRADA, Incident.Status.REABIERTA]
                     ).count(),
                     "pending": selectors.pending_queue(
-                        inbox.annotate(last_result=selectors.latest_intervention_result_subquery())
+                        planned.annotate(
+                            last_result=selectors.latest_intervention_result_subquery()
+                        )
                     ).count(),
-                    "to_verify": selectors.verification_queue(inbox).count(),
-                    "scheduled_today": inbox.filter(
+                    "to_verify": selectors.verifiable_by(inbox, user).count(),
+                    "scheduled_today": planned.filter(
                         assignments__is_current=True,
                         assignments__scheduled_at__gte=today_start,
                         assignments__scheduled_at__lt=today_end,
@@ -228,7 +269,9 @@ class PlanningOptionsView(APIView):
 
 class PlanningListView(generics.ListAPIView):
     """
-    Bandeja del Planificador: solo incidencias de sus áreas autorizadas.
+    Bandeja del Planificador: incidencias de las áreas que planifica y cierres técnicos
+    de las áreas donde verifica. ``queue=verification`` lista solo los cierres que el
+    usuario puede verificar (función ``can_verify`` y sin ser quien los ejecutó).
 
     Filtros: ``area``, ``status``, ``priority`` (``none`` = sin prioridad),
     ``technician``, ``scheduled_on`` (AAAA-MM-DD, hora de Lima) y ``q`` (código o
@@ -237,7 +280,7 @@ class PlanningListView(generics.ListAPIView):
     """
 
     serializer_class = PlanningListSerializer
-    permission_classes = [IsAuthenticated, IsPlanificador]
+    permission_classes = [IsAuthenticated, CanUseReviewInbox]
 
     ORDERINGS = {
         "-created_at": ("-created_at", "-id"),
@@ -251,12 +294,24 @@ class PlanningListView(generics.ListAPIView):
         queryset = selectors.planning_incidents(self.request.user).annotate(
             last_result=selectors.latest_intervention_result_subquery()
         )
+        # Función desde la que se consulta (ADR 0009): Planificación o Verificaciones.
+        function = params.get("function", "")
+        if function == "plan":
+            queryset = queryset.filter(support_area__in=selectors.planning_areas(self.request.user))
+        elif function == "verify":
+            queryset = queryset.filter(
+                support_area__in=selectors.verification_areas(self.request.user),
+                status=Incident.Status.CERRADA,
+            )
+        elif function:
+            raise serializers.ValidationError({"function": "Función no válida."})
+
         # Colas de trabajo del Planificador (ADR 0006).
         queue = params.get("queue", "")
         if queue == "pending":
             queryset = selectors.pending_queue(queryset)
         elif queue == "verification":
-            queryset = selectors.verification_queue(queryset)
+            queryset = selectors.verifiable_by(queryset, self.request.user)
         elif queue:
             raise serializers.ValidationError({"queue": "Cola no válida."})
 
@@ -441,7 +496,19 @@ class IncidentInterventionView(_PlanningActionView):
 
 
 class IncidentVerificationView(_PlanningActionView):
-    """El Planificador del área registra Conforme o No conforme sobre el cierre vigente."""
+    """
+    Registra Conforme o No conforme sobre el cierre vigente. Requiere la función
+    ``can_verify`` en el área (independiente de ``can_plan``); el servicio aplica
+    además la separación de funciones. No exige el rol Planificador.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_incident(self, request: Request, code: str) -> Incident:
+        incident = _visible_incident_or_404(request, code)
+        if not selectors.can_verify_area(request.user, incident.support_area):
+            raise PermissionDenied(attention_services.NOT_VERIFIER)
+        return incident
 
     def post(self, request: Request, code: str) -> Response:
         incident = self.get_incident(request, code)
@@ -457,7 +524,18 @@ class IncidentVerificationView(_PlanningActionView):
 
 
 class IncidentReopenView(_PlanningActionView):
-    """Reabre un cierre verificado como No conforme (motivo obligatorio)."""
+    """
+    Reabre un cierre verificado como No conforme (motivo obligatorio). Puede hacerlo
+    quien planifica o verifica en el área.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_incident(self, request: Request, code: str) -> Incident:
+        incident = _visible_incident_or_404(request, code)
+        if not selectors.can_reopen_area(request.user, incident.support_area):
+            raise PermissionDenied(attention_services.NOT_REOPENER)
+        return incident
 
     def post(self, request: Request, code: str) -> Response:
         incident = self.get_incident(request, code)

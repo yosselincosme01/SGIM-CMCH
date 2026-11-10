@@ -1,7 +1,7 @@
 import { Link } from 'react-router'
 
 import type { PriorityLevel } from '../incidents/api'
-import { PLANNER_PATH } from './paths'
+import { type PlanningMode, sectionLabel, sectionPath } from './paths'
 
 /** Prioridad siempre con texto (no solo color). Los niveles son provisionales. */
 export function PriorityBadge({ priority }: { priority: PriorityLevel | null | undefined }) {
@@ -18,7 +18,13 @@ export function ProvisionalPriorityNote() {
   )
 }
 
-export function PlanningBreadcrumb({ current }: { current?: string }) {
+export function PlanningBreadcrumb({
+  current,
+  mode = 'plan',
+}: {
+  current?: string
+  mode?: PlanningMode
+}) {
   return (
     <nav aria-label="Ruta de navegación" className="breadcrumb">
       <ol>
@@ -28,12 +34,12 @@ export function PlanningBreadcrumb({ current }: { current?: string }) {
         {current ? (
           <>
             <li>
-              <Link to={PLANNER_PATH}>Planificador</Link>
+              <Link to={sectionPath(mode)}>{sectionLabel(mode)}</Link>
             </li>
             <li aria-current="page">{current}</li>
           </>
         ) : (
-          <li aria-current="page">Planificador</li>
+          <li aria-current="page">{sectionLabel(mode)}</li>
         )}
       </ol>
     </nav>

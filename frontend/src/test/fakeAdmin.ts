@@ -50,7 +50,9 @@ function initial(): AdminState {
     users: [
       makeAccount(3, 'admin.prueba', ['administrador']),
       makeAccount(10, 'tec.uno', ['personal_atencion'], {
-        memberships: [{ area: 'ti', area_name: 'TI', can_plan: false, can_be_assigned: true }],
+        memberships: [
+          { area: 'ti', area_name: 'TI', can_plan: false, can_be_assigned: true, can_verify: false },
+        ],
         open_assignment_areas: ['ti'],
       }),
       makeAccount(11, 'sol.dos', ['solicitante']),
@@ -99,6 +101,107 @@ export const DASHBOARD = {
   by_care_unit: [{ key: 'demo-emergencia', label: '[DEMO] Emergencia', total: 4 }],
   by_priority: [{ key: '', label: 'Sin prioridad', total: 1 }],
 }
+
+const AREA_TI = { code: 'ti', name: 'TI' }
+const UNIT = { code: 'demo-emergencia', name: '[DEMO] Emergencia', is_demo: true }
+
+export const GLOBAL_INCIDENTS = [
+  {
+    code: 'INC-2026-0101',
+    status: 'cerrada',
+    status_label: 'Cerrada',
+    care_unit: UNIT,
+    support_area: AREA_TI,
+    description_excerpt: 'Impresora de admisión sin conexión (ficticio).',
+    created_by: { username: 'ana.prueba', full_name: 'Ana Prueba' },
+    created_at: '2026-11-05T14:00:00Z',
+    priority: null,
+    assignment: null,
+    has_attachments: true,
+    last_result: null,
+    pending_verification: true,
+  },
+  {
+    code: 'INC-2026-0102',
+    status: 'registrada',
+    status_label: 'Registrada',
+    care_unit: UNIT,
+    support_area: { code: 'mantenimiento', name: 'Mantenimiento' },
+    description_excerpt: 'Puerta de emergencia atascada (ficticio).',
+    created_by: { username: 'ana.prueba', full_name: 'Ana Prueba' },
+    created_at: '2026-11-06T14:00:00Z',
+    priority: null,
+    assignment: null,
+    has_attachments: false,
+    last_result: null,
+    pending_verification: false,
+  },
+]
+
+/** Detalle de solo lectura: sin ``attachments``, sin fotos y sin ``permissions``. */
+export const GLOBAL_DETAIL = {
+  ...GLOBAL_INCIDENTS[0],
+  description: 'Impresora de admisión sin conexión (ficticio).',
+  prior_actions: '',
+  equipment_qr_status: 'qr_readable',
+  equipment_qr_status_label: 'QR legible',
+  qr_code: 'QR-FICTICIO-01',
+  attachment_count: 1,
+  events: [
+    {
+      event_type: 'created',
+      label: 'Incidencia registrada',
+      actor: 'Ana Prueba',
+      from_status: null,
+      to_status: 'registrada',
+      details: {},
+      created_at: '2026-11-05T14:00:00Z',
+    },
+  ],
+  interventions: [
+    {
+      id: 1,
+      assignment: 1,
+      technician: { username: 'tec.uno', full_name: 'Tomás Prueba' },
+      result: 'solved',
+      result_label: 'Solucionado',
+      diagnosis: 'Cable de red dañado (ficticio).',
+      actions_taken: 'Se reemplazó el cable.',
+      used_parts: false,
+      used_parts_detail: '',
+      parts_required: false,
+      parts_required_detail: '',
+      unresolved_reason: '',
+      observations: '',
+      photo_count: 2,
+      is_closure: true,
+      verification: null,
+      created_at: '2026-11-05T18:00:00Z',
+    },
+  ],
+  closure: null,
+}
+
+export const AUDIT = [
+  {
+    id: 2,
+    action: 'report_exported',
+    action_label: 'Reporte exportado',
+    actor: 'admin.prueba',
+    target_user: null,
+    details: { report: 'incidents', rows: 4 },
+    created_at: '2026-11-07T15:00:00Z',
+  },
+  {
+    id: 1,
+    action: 'user_created',
+    action_label: 'Cuenta creada',
+    actor: 'admin.prueba',
+    target_user: 'tec.uno',
+    details: { username: 'tec.uno' },
+    created_at: '2026-11-06T15:00:00Z',
+  },
+]
 
 function roles() {
   return backend.sessionUser?.roles ?? []
@@ -178,7 +281,7 @@ export const adminHandlers = [
     return HttpResponse.json({
       roles: [
         { code: 'solicitante', label: 'Solicitante' },
-        { code: 'planificador', label: 'Planificador' },
+        { code: 'planificador', label: 'Responsable de Área' },
         { code: 'personal_atencion', label: 'Personal de Atención' },
       ],
       areas: [
@@ -186,7 +289,43 @@ export const adminHandlers = [
         { code: 'mantenimiento', name: 'Mantenimiento' },
         { code: 'ti', name: 'TI' },
       ],
+      audit_actions: [
+        { code: 'user_created', label: 'Cuenta creada' },
+        { code: 'report_exported', label: 'Reporte exportado' },
+      ],
     })
+  }),
+
+  http.get(`${API}/admin/incidents/`, async ({ request }) => {
+    const blocked = adminGuard()
+    if (blocked) return blocked
+    await record(request)
+    const params = new URL(request.url).searchParams
+    const results = GLOBAL_INCIDENTS.filter(
+      (item) =>
+        (!params.get('area') || item.support_area.code === params.get('area')) &&
+        (!params.get('status') || item.status === params.get('status')),
+    )
+    return HttpResponse.json({ count: results.length, next: null, previous: null, results })
+  }),
+
+  http.get(`${API}/admin/incidents/:code/`, async ({ request, params }) => {
+    const blocked = adminGuard()
+    if (blocked) return blocked
+    await record(request)
+    if (params.code !== GLOBAL_DETAIL.code) {
+      return HttpResponse.json({ detail: 'No encontrado.' }, { status: 404 })
+    }
+    return HttpResponse.json(GLOBAL_DETAIL)
+  }),
+
+  http.get(`${API}/admin/audit/`, async ({ request }) => {
+    const blocked = adminGuard()
+    if (blocked) return blocked
+    await record(request)
+    const action = new URL(request.url).searchParams.get('action')
+    const results = AUDIT.filter((item) => !action || item.action === action)
+    return HttpResponse.json({ count: results.length, next: null, previous: null, results })
   }),
 
   http.get(`${API}/admin/users/`, async ({ request }) => {
@@ -256,7 +395,7 @@ export const adminHandlers = [
     if (!user) return HttpResponse.json({ detail: 'No encontrado.' }, { status: 404 })
     if (user.open_assignment_areas.length && body.active === false) {
       return HttpResponse.json(
-        { detail: 'La persona tiene asignaciones vigentes. Pide al Planificador que las reasigne.' },
+        { detail: 'La persona tiene asignaciones vigentes. Pide al Responsable de Área que las reasigne.' },
         { status: 409 },
       )
     }

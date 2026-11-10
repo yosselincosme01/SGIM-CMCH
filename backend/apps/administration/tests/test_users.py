@@ -377,3 +377,138 @@ def test_admin_creation_command_refuses_unsafe_cases(monkeypatch, make_user, pro
             stdout=StringIO(),
         )
     assert get_roles(get_user_model().objects.get(username="ti.admin")) == ["solicitante"]
+
+
+# --- Funciones independientes por área (ADR 0008) -------------------------------------
+
+
+def _functions(user):
+    return {
+        m.area.code: (m.can_plan, m.can_be_assigned, m.can_verify)
+        for m in SupportAreaMembership.objects.filter(user=user).select_related("area")
+    }
+
+
+def test_admin_configures_the_three_functions_independently(client_for, admin_user):
+    payload = _new_user_payload(
+        memberships=[
+            {"area": "ti", "can_plan": True, "can_be_assigned": False, "can_verify": False},
+            {"area": "mantenimiento", "can_plan": False, "can_verify": True},
+            {"area": "ingenieria_clinica", "can_be_assigned": True},
+        ]
+    )
+
+    response = client_for(admin_user).post(USERS, payload, format="json")
+
+    assert response.status_code == 201, response.json()
+    user = get_user_model().objects.get(username="nuevo.prueba")
+    assert _functions(user) == {
+        "ti": (True, False, False),
+        "mantenimiento": (False, False, True),
+        "ingenieria_clinica": (False, True, False),
+    }
+    shown = {m["area"]: m["can_verify"] for m in response.json()["memberships"]}
+    assert shown == {"ti": False, "mantenimiento": True, "ingenieria_clinica": False}
+    created = AuditLog.objects.get(target_user=user, action="user_created")
+    assert created.details["memberships"]["mantenimiento"]["can_verify"] is True
+
+
+def test_verify_function_does_not_require_the_planner_role(client_for, admin_user):
+    payload = _new_user_payload(
+        roles=["solicitante"], memberships=[{"area": "ti", "can_verify": True}]
+    )
+
+    response = client_for(admin_user).post(USERS, payload, format="json")
+
+    assert response.status_code == 201, response.json()
+    user = get_user_model().objects.get(username="nuevo.prueba")
+    assert get_roles(user) == ["solicitante"]
+    assert _functions(user) == {"ti": (False, False, True)}
+
+
+def test_verify_function_requires_an_operational_role(client_for, admin_user):
+    payload = _new_user_payload(roles=[], memberships=[{"area": "ti", "can_verify": True}])
+
+    response = client_for(admin_user).post(USERS, payload, format="json")
+
+    assert response.status_code == 400
+    assert "memberships" in response.json()
+    assert not get_user_model().objects.filter(username="nuevo.prueba").exists()
+
+
+def test_changing_plan_does_not_change_verify(client_for, admin_user, make_user):
+    user = make_user("plan.prueba", Role.PLANIFICADOR, plans=("ti",), verifies=("ti",))
+    client = client_for(admin_user)
+
+    response = client.patch(
+        user_url(user),
+        {"memberships": [{"area": "ti", "can_plan": False, "can_verify": True}]},
+        format="json",
+    )
+    assert response.status_code == 200, response.json()
+    assert _functions(user) == {"ti": (False, False, True)}
+
+    client.patch(
+        user_url(user),
+        {"memberships": [{"area": "ti", "can_plan": True, "can_verify": False}]},
+        format="json",
+    )
+    assert _functions(user) == {"ti": (True, False, False)}
+    changes = (
+        AuditLog.objects.filter(target_user=user, action="memberships_changed")
+        .order_by("pk")
+        .last()
+    )
+    assert changes.details["changes"]["from"]["ti"]["can_verify"] is True
+    assert changes.details["changes"]["to"]["ti"]["can_verify"] is False
+
+
+def test_removing_the_planner_role_keeps_verify(client_for, admin_user, make_user):
+    user = make_user(
+        "verif.prueba",
+        Role.PLANIFICADOR,
+        Role.SOLICITANTE,
+        plans=("ti",),
+        verifies=("ti",),
+    )
+
+    client_for(admin_user).patch(user_url(user), {"roles": ["solicitante"]}, format="json")
+
+    assert _functions(user) == {"ti": (False, False, True)}
+
+
+def test_removing_every_operational_role_removes_verify(client_for, admin_user, make_user):
+    user = make_user("verif.prueba", Role.SOLICITANTE, verifies=("ti",))
+
+    client_for(admin_user).patch(user_url(user), {"roles": []}, format="json")
+
+    assert not SupportAreaMembership.objects.filter(user=user).exists()
+
+
+def test_admin_cannot_grant_itself_functions(client_for, admin_user):
+    response = client_for(admin_user).patch(
+        user_url(admin_user),
+        {"roles": ["planificador"], "memberships": [{"area": "ti", "can_verify": True}]},
+        format="json",
+    )
+
+    assert response.status_code == 403
+    assert not SupportAreaMembership.objects.filter(user=admin_user).exists()
+    assert get_roles(admin_user) == ["administrador"]
+
+
+def test_admin_cannot_grant_the_admin_role_with_verify(client_for, admin_user, make_user):
+    user = make_user("plan.prueba", Role.PLANIFICADOR)
+
+    response = client_for(admin_user).patch(
+        user_url(user),
+        {
+            "roles": ["planificador", "administrador"],
+            "memberships": [{"area": "ti", "can_verify": True}],
+        },
+        format="json",
+    )
+
+    assert response.status_code == 400
+    assert get_roles(user) == ["planificador"]
+    assert not SupportAreaMembership.objects.filter(user=user).exists()

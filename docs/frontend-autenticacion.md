@@ -1,25 +1,34 @@
-# Frontend: autenticación, sesión y vistas por rol
+# Frontend: autenticación, sesión y navegación
 
 React 19 + TypeScript + Vite, React Router 8. Consume solo los endpoints existentes de
 `/api/v1/auth/` (ver [ADR 0002](adr/0002-autenticacion-y-roles.md) y [sesiones](sesiones.md)).
 
-## Rutas
+## Rutas y menú
+
+Desde el [ADR 0009](adr/0009-navegacion-por-capacidades.md) no hay vistas por rol ni
+selector de vistas. Cada persona ve un único menú lateral, construido con sus permisos
+efectivos (`capabilities` y `area_functions` de `/api/v1/auth/me/`).
 
 | Ruta | Acceso | Contenido |
 |---|---|---|
 | `/login` | Público | Inicio de sesión |
-| `/` | Con sesión | Inicio: vistas autorizadas según los roles |
-| `/solicitante` | Rol `solicitante` | Vista Solicitante |
-| `/planificador` | Rol `planificador` | Vista Planificador: bandeja de sus áreas autorizadas |
-| `/planificador/incidencias/:code` | Rol `planificador` | Detalle, priorización y programación |
-| `/responsable-area/*` | Con sesión | Ruta anterior: redirige a `/planificador/*` |
-| `/personal-atencion` | Rol `personal_atencion` | Vista Personal de Atención |
-| `/administrador` | Rol `administrador` | Vista Administrador |
-| `/sin-acceso` | Con sesión | La vista pedida no corresponde a los roles del usuario |
+| `/` | Con sesión | Inicio: dashboard operativo personal (ADR 0010); una cuenta solo administrativa va a `/administracion` |
+| `/mi-cuenta` | Con sesión | Datos de la cuenta y funciones por área |
+| `/incidencias/nueva`, `/incidencias[/:code]` | Cuenta operativa | Registrar incidencia y Mis incidencias |
+| `/atenciones[/incidencias/:code]` | `can_attend` | Mis atenciones |
+| `/planificacion[/incidencias/:code]` | `can_plan` | Planificación |
+| `/verificaciones[/incidencias/:code]` | `can_verify` | Verificaciones |
+| `/indicadores` | `can_plan` | Indicadores de sus áreas |
+| `/reportes` | `can_plan` o Administrador | Reportes Excel |
+| `/administracion[/incidencias|/usuarios|/auditoria]` | Administrador | Administración |
+| `/sin-acceso` | Con sesión | Funcionalidad no habilitada para la cuenta |
 
-La restricción por rol en el frontend es **solo de navegación**: la autorización real la
-aplica el backend en cada endpoint. Un usuario con varios roles cambia de vista desde el
-selector "Vista" de la cabecera, sin volver a iniciar sesión.
+Las rutas anteriores (`/solicitante`, `/planificador`, `/responsable-area`,
+`/personal-atencion`, `/administrador`) redirigen a las actuales.
+
+La protección en el frontend es **solo de navegación** (`features/navigation/access.ts`,
+compartido por el menú y `RequireAccess`). La autorización real la aplica el backend en
+cada endpoint.
 
 ## Identidad visual
 
@@ -32,7 +41,7 @@ selector "Vista" de la cabecera, sin volver a iniciar sesión.
 | Pantalla | Archivo | Ubicación |
 |---|---|---|
 | Login | `Logo-CMCH-fondo-blanco.jpg` | Arriba a la derecha de la página, **fuera de la tarjeta** de login, sobre fondo blanco |
-| Vistas internas (todas, sea cual sea el rol) | `Logo-CMCH-fondo-guinda.png` | **Extremo izquierdo** de la barra superior guinda (`AppLayout`), seguido del nombre SGIM-CMCH con un separador vertical. Nunca a la derecha |
+| Páginas internas (todas) | `Logo-CMCH-fondo-guinda.png` | **Extremo izquierdo** de la barra superior guinda (`AppLayout`), seguido del nombre SGIM-CMCH con un separador vertical y del botón del menú. Nunca a la derecha |
 
 - Tokens de marca en `src/styles/index.css`: `--color-brand-guinda: #9a1331` es el fondo
   medido del PNG (diferencia máxima de 3 unidades por canal), y `--color-brand-logo-bg:

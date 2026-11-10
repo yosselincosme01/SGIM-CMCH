@@ -25,7 +25,7 @@ REASON_MIN = 10
 REASON_MAX = 500
 NOTES_MAX = 1000
 
-NOT_PLANNER = "No eres Planificador del área de esta incidencia."
+NOT_PLANNER = "No tienes la función de planificar en el área de esta incidencia."
 NOT_PLANNABLE = "La incidencia no se puede planificar en su estado actual."
 INVALID_TECHNICIAN = "La persona seleccionada no es técnico autorizado de esta área."
 INVALID_PRIORITY = "Selecciona una prioridad válida."
@@ -189,7 +189,7 @@ def schedule_attention(
 
     current = current_assignment_lock_queryset(locked).first()
     if (current.pk if current else None) != expected_assignment_id:
-        raise PlanningConflict("Otro Planificador actualizó esta incidencia.")
+        raise PlanningConflict("Otra persona actualizó esta incidencia.")
 
     _check_priority(priority)
     if not selectors.is_assignable_technician(technician, locked.support_area):

@@ -7,15 +7,17 @@ import { Alert } from '../../shared/ui/Alert'
 import { Button } from '../../shared/ui/Button'
 import { LoadingState } from '../../shared/ui/LoadingState'
 import type { Page } from '../incidents/api'
-import { ADMIN_PATH, AdminBreadcrumb } from './AdminDashboardPage'
+import { adminUserPath, PATHS } from '../../shared/paths'
+import { AdminBreadcrumb } from './AdminDashboardPage'
 import { type AdminOptions, type AdminUser, fetchAdminOptions, fetchUsers } from './api'
-import { ROLE_LABELS } from './labels'
+import { AREA_FUNCTION_LABELS, ROLE_LABELS } from './labels'
+import { formatDateTime } from '../../shared/dates'
 
 const PAGE_SIZE = 20
 
 /** Gestión de usuarios: búsqueda, filtros y paginación. */
 export function UsersPage() {
-  useDocumentTitle('Usuarios')
+  useDocumentTitle('Usuarios y permisos')
   const [params, setParams] = useSearchParams()
   const filters = {
     q: params.get('q') ?? '',
@@ -79,16 +81,16 @@ export function UsersPage() {
 
   return (
     <div className="stack">
-      <AdminBreadcrumb current="Usuarios" />
+      <AdminBreadcrumb current="Usuarios y permisos" />
       <header className="page__header page__header--with-action">
         <div>
-          <p className="page__eyebrow">Administrador</p>
-          <h1 className="page__title">Usuarios</h1>
+          <p className="page__eyebrow">Administración</p>
+          <h1 className="page__title">Usuarios y permisos</h1>
           <p className="page__lead">
-            Cuentas operativas: Solicitante, Planificador y Personal de Atención.
+            Cuentas operativas, sus roles internos y sus permisos independientes por área.
           </p>
         </div>
-        <Link to={`${ADMIN_PATH}/usuarios/nuevo`} className="btn btn--primary">
+        <Link to={PATHS.adminNewUser} className="btn btn--primary">
           Nuevo usuario
         </Link>
       </header>
@@ -115,7 +117,7 @@ export function UsersPage() {
         <div className="filters__grid">
           <div className="field">
             <label className="field__label" htmlFor="users-role">
-              Rol
+              Rol interno
             </label>
             <select
               id="users-role"
@@ -179,13 +181,16 @@ export function UsersPage() {
         </div>
       ) : (
         <>
-          <table className="data-table">
+          <p className="muted" role="status">
+            {data.count === 1 ? '1 cuenta' : `${data.count} cuentas`}
+          </p>
+          <table className="data-table users-table">
             <caption className="visually-hidden">Usuarios, página {filters.page}</caption>
             <thead>
               <tr>
-                <th scope="col">Usuario</th>
-                <th scope="col">Nombre</th>
-                <th scope="col">Roles</th>
+                <th scope="col">Persona</th>
+                <th scope="col">Roles internos</th>
+                <th scope="col">Permisos por área</th>
                 <th scope="col">Estado</th>
                 <th scope="col">
                   <span className="visually-hidden">Acción</span>
@@ -195,22 +200,38 @@ export function UsersPage() {
             <tbody>
               {data.results.map((user) => (
                 <tr key={user.id}>
-                  <th scope="row" data-label="Usuario">
-                    {user.username}
+                  <th scope="row" data-label="Persona">
+                    <span className="users-table__name">{user.full_name}</span>
+                    <span className="planning-table__meta">{user.username}</span>
                   </th>
-                  <td data-label="Nombre">{user.full_name}</td>
-                  <td data-label="Roles">
-                    {user.roles.length ? user.roles.map((r) => ROLE_LABELS[r] ?? r).join(', ') : 'Sin roles'}
+                  <td data-label="Roles internos">
+                    {user.roles.length ? (
+                      <ul className="chip-list" aria-label={`Roles de ${user.username}`}>
+                        {user.roles.map((role) => (
+                          <li key={role} className="chip">
+                            {ROLE_LABELS[role] ?? role}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <span className="muted">Sin roles</span>
+                    )}
+                  </td>
+                  <td data-label="Permisos por área">
+                    <AreaPermissions memberships={user.memberships} />
                   </td>
                   <td data-label="Estado">
-                    <span className={`badge ${user.is_active ? 'badge--asignada' : 'badge--cerrada'}`}>
+                    <span className={`badge ${user.is_active ? 'badge--active' : 'badge--inactive'}`}>
                       {user.is_active ? 'Activa' : 'Desactivada'}
                     </span>
                     {user.is_protected && <span className="planning-table__meta">Cuenta protegida</span>}
+                    <span className="planning-table__meta">
+                      {user.last_login ? `Último acceso: ${formatDateTime(user.last_login)}` : 'Sin accesos'}
+                    </span>
                   </td>
                   <td data-label="Acción">
                     <Link
-                      to={`${ADMIN_PATH}/usuarios/${user.id}`}
+                      to={adminUserPath(user.id)}
                       className="btn btn--secondary"
                       aria-label={`${user.is_protected ? 'Ver' : 'Editar'} ${user.username}`}
                     >
@@ -245,5 +266,27 @@ export function UsersPage() {
         </>
       )}
     </div>
+  )
+}
+
+const FUNCTION_KEYS = Object.keys(AREA_FUNCTION_LABELS) as (keyof typeof AREA_FUNCTION_LABELS)[]
+
+/** Permisos habilitados por área. Las pertenencias sin ningún permiso no se muestran. */
+function AreaPermissions({ memberships }: { memberships: AdminUser['memberships'] }) {
+  const enabled = memberships
+    .map((membership) => ({
+      area: membership.area_name ?? membership.area,
+      labels: FUNCTION_KEYS.filter((key) => membership[key]).map((key) => AREA_FUNCTION_LABELS[key]),
+    }))
+    .filter((item) => item.labels.length > 0)
+  if (enabled.length === 0) return <span className="muted">Ninguno</span>
+  return (
+    <ul className="users-table__areas">
+      {enabled.map((item) => (
+        <li key={item.area}>
+          <strong>{item.area}:</strong> {item.labels.join(' · ')}
+        </li>
+      ))}
+    </ul>
   )
 }
