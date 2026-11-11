@@ -99,6 +99,9 @@ export function MyIncidentsPage() {
                   <td data-label="Área de soporte">{incident.support_area.name}</td>
                   <td data-label="Estado">
                     <StatusBadge status={incident.status} label={incident.status_label} />
+                    {incident.survey_pending && (
+                      <span className="planning-table__meta survey-pending-flag">Evaluación pendiente</span>
+                    )}
                   </td>
                 </tr>
               ))}

@@ -1230,3 +1230,151 @@ a {
   color: var(--color-text-muted);
   border-color: var(--color-border);
 }
+
+/* --- Encuesta de satisfacción (ADR 0012) -------------------------------- */
+
+.survey-invite {
+  border-left: 4px solid var(--color-primary);
+}
+
+.survey-pending-flag {
+  color: var(--color-primary);
+  font-weight: 600;
+}
+
+/* Calificación en estrellas: el dibujo es decorativo; el valor también va en texto. */
+.rating {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.rating__stars {
+  color: var(--color-primary);
+  font-size: 1.15rem;
+  letter-spacing: 0.05em;
+}
+
+.rating__empty {
+  color: var(--color-border);
+}
+
+.rating__text {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.survey-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.survey-list__item {
+  display: grid;
+  gap: var(--space-1);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.survey-list__item:first-child {
+  padding-top: 0;
+  border-top: 0;
+}
+
+.survey-list__meta {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.survey-form__ticket {
+  color: var(--color-text-muted);
+}
+
+.star-rating {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.star-rating__options {
+  display: flex;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+/* Cada estrella es un objetivo táctil de 44 px. */
+.star-rating__option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: var(--radius-small);
+  color: var(--color-border);
+  cursor: pointer;
+}
+
+.star-rating__star {
+  font-size: 1.9rem;
+  line-height: 1;
+}
+
+.star-rating__option--on {
+  color: var(--color-primary);
+}
+
+.star-rating__option:hover {
+  background: var(--color-primary-soft);
+}
+
+.star-rating__option:has(input:focus-visible) {
+  outline: 3px solid var(--color-focus);
+  outline-offset: 2px;
+}
+
+.star-rating__label {
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.satisfaction__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: var(--space-3);
+  margin: 0 0 var(--space-2);
+}
+
+.satisfaction__grid dt {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.satisfaction__grid dd {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 800;
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.satisfaction__unit {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+/* Recordatorio de encuestas pendientes (ADR 0012). */
+.reminder-list {
+  margin: var(--space-3) 0 0;
+  padding-left: var(--space-5);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.reminder-list a {
+  font-weight: 600;
+}

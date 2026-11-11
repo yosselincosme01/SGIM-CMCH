@@ -420,3 +420,53 @@ describe('reportes', () => {
     expect(screen.queryByRole('heading', { name: 'Incidencias (por ticket)' })).not.toBeInTheDocument()
   })
 })
+
+describe('satisfacción del solicitante (ADR 0012)', () => {
+  it('el Panel de Administración muestra los indicadores agregados', async () => {
+    signIn(USERS.administrador)
+    renderApp('/administracion')
+
+    const block = await screen.findByRole('region', { name: 'Satisfacción del solicitante' })
+    expect(within(block).getByText('Promedio').nextElementSibling).toHaveTextContent(/^4[.,]5 \/ 5$/)
+    expect(within(block).getByText('Respondidas').nextElementSibling).toHaveTextContent('2')
+    expect(within(block).getByText('Pendientes de respuesta').nextElementSibling).toHaveTextContent('1')
+    expect(within(block).getByText('Tasa de respuesta').nextElementSibling).toHaveTextContent('50 %')
+    expect(block).toHaveTextContent('no se consideran insatisfacción')
+  })
+
+  it('sin respuestas no muestra promedio ni interpreta insatisfacción', async () => {
+    const { DASHBOARD } = await import('../../test/fakeAdmin')
+    const original = DASHBOARD.satisfaction
+    DASHBOARD.satisfaction = { eligible: 2, answered: 0, pending: 2, expired: 0, average: null, response_rate: 0 } as never
+    try {
+      signIn(USERS.administrador)
+      renderApp('/administracion')
+
+      const block = await screen.findByRole('region', { name: 'Satisfacción del solicitante' })
+      expect(block).toHaveTextContent('Aún no hay encuestas respondidas en el periodo (2 pendientes de respuesta).')
+      expect(within(block).queryByText('Promedio')).not.toBeInTheDocument()
+    } finally {
+      DASHBOARD.satisfaction = original
+    }
+  })
+
+  it('Reportes incluye los indicadores y el reporte «Satisfacción del solicitante»', async () => {
+    signIn(USERS.administrador)
+    renderApp('/reportes')
+
+    expect(await screen.findByRole('region', { name: 'Satisfacción del solicitante' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Descargar Satisfacción del solicitante en Excel' }),
+    ).toBeInTheDocument()
+  })
+
+  it('la consulta global muestra las evaluaciones en modo lectura', async () => {
+    signIn(USERS.administrador)
+    renderApp('/administracion/incidencias/INC-2026-0101')
+
+    const history = await screen.findByRole('region', { name: 'Satisfacción del solicitante' })
+    expect(within(history).getByLabelText('5 de 5 estrellas')).toBeInTheDocument()
+    expect(within(history).getByText('Muy buena atención (ficticio).')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Evaluar|Enviar evaluación/ })).not.toBeInTheDocument()
+  })
+})

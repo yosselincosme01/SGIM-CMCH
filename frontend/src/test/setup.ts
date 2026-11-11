@@ -8,6 +8,7 @@ import { backend } from './fakeBackend'
 import { homeBackend } from './fakeHome'
 import { incidentsBackend } from './fakeIncidents'
 import { planningBackend } from './fakePlanning'
+import { surveyBackend } from './fakeSurvey'
 import { server } from './server'
 
 function clearCookies() {
@@ -18,8 +19,10 @@ function clearCookies() {
 }
 
 // Con la suite en paralelo, 1 s (valor por defecto) produce fallos intermitentes por
-// tiempo en equipos cargados; 3 s sigue detectando esperas que nunca se cumplen.
-configure({ asyncUtilTimeout: 3000 })
+// tiempo en equipos cargados. La primera prueba de cada archivo también carga sus
+// módulos mientras corren los demás, así que 5 s evita esos falsos fallos y sigue
+// detectando esperas que nunca se cumplen (el límite de cada prueba es de 15 s).
+configure({ asyncUtilTimeout: 5000 })
 
 // Cualquier petición no simulada es un error: las pruebas nunca salen a la red.
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }))
@@ -33,6 +36,7 @@ afterEach(() => {
   attentionBackend.reset()
   adminBackend.reset()
   homeBackend.reset()
+  surveyBackend.reset()
   clearCookies()
   localStorage.clear()
   sessionStorage.clear()

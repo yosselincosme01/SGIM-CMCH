@@ -87,6 +87,8 @@ type Reason = 'idle' | 'absolute'
 
 interface BackendState {
   sessionUser: CurrentUser | null
+  /** Identifica la sesión de Django simulada: cambia con cada inicio y cierre de sesión. */
+  sessionId: number
   /** Si tiene valor, la próxima petición autenticada responde 401 session_expired. */
   expiredReason: Reason | null
   /** Segundos restantes que informa GET /auth/session/. */
@@ -104,6 +106,7 @@ interface BackendState {
 function initialState(): BackendState {
   return {
     sessionUser: null,
+    sessionId: 0,
     expiredReason: null,
     expiresIn: IDLE_TIMEOUT,
     limit: 'idle',
@@ -127,6 +130,7 @@ export const backend: BackendState & {
   /** Simula una sesión ya iniciada (por ejemplo, al recargar la página). */
   signIn(user) {
     backend.sessionUser = user
+    backend.sessionId += 1
     backend.expiredReason = null
   },
   requestsTo(path, method) {
@@ -227,6 +231,7 @@ export const handlers = [
     if (denied) return denied
     if (entry.csrfHeader !== backend.csrfToken) return json(CSRF_FAILED, 403)
     backend.sessionUser = null
+    backend.sessionId += 1
     return new HttpResponse(null, { status: 204 })
   }),
 

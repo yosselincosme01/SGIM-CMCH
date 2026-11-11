@@ -25,7 +25,7 @@ export interface HomeSummary {
   attention: { assigned: number } | null
   planning: { to_schedule: number; follow_up: number } | null
   verification: { pending: number } | null
-  /** Encuestas de satisfacción: Etapa 3. Siempre ``null`` por ahora. */
+  /** Encuestas de satisfacción pendientes de sus incidencias (ADR 0012). */
   surveys: { pending: number } | null
   todo: { total: number; items: TodoItem[] }
 }

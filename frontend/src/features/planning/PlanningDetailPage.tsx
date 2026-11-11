@@ -15,6 +15,7 @@ import {
 import { StatusBadge } from '../incidents/StatusBadge'
 import { fetchPlanningOptions, fetchTechnicians, type Technician } from './api'
 import { InterventionHistory } from '../incidents/InterventionHistory'
+import { SurveyHistory } from '../incidents/SatisfactionSurvey'
 import { ClosurePanel } from './ClosurePanel'
 import { PlanningPanel } from './PlanningPanel'
 import { type PlanningMode, sectionLabel, sectionPath } from './paths'
@@ -181,6 +182,7 @@ export function PlanningDetailPage({ mode = 'plan' }: { mode?: PlanningMode }) {
           <IncidentSummaryCard incident={incident} />
           <IncidentEvidence incident={incident} />
           <InterventionHistory interventions={incident.interventions ?? []} />
+          <SurveyHistory surveys={incident.surveys ?? []} />
           <IncidentHistory events={incident.events} />
         </div>
       </div>

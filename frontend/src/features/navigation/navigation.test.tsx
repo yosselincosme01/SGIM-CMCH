@@ -390,11 +390,19 @@ describe('inicio', () => {
     expect(screen.queryByRole('link', { name: 'Registrar incidencia' })).not.toBeInTheDocument()
   })
 
-  it('no muestra encuestas de satisfacción todavía', async () => {
-    await openApp(USERS.multirol)
+  it('encuestas pendientes: indicador que lleva a Mis incidencias', async () => {
+    homeBackend.override = { ...defaultSummaryFor(USERS.solicitante), surveys: { pending: 2 } }
+    await openApp(USERS.solicitante)
 
-    await screen.findByRole('region', { name: 'Resumen' })
-    expect(screen.queryByText(/[Ee]ncuesta/)).not.toBeInTheDocument()
+    expect(await indicators()).toEqual(['Encuestas pendientes: 2', 'Mis incidencias abiertas: 2'])
+    expect(screen.getByRole('link', { name: 'Encuestas pendientes: 2' })).toHaveAttribute('href', '/incidencias')
+  })
+
+  it('sin encuestas pendientes no muestra el indicador', async () => {
+    homeBackend.override = { ...defaultSummaryFor(USERS.solicitante), surveys: { pending: 0 } }
+    await openApp(USERS.solicitante)
+
+    expect(await indicators()).toEqual(['Mis incidencias abiertas: 2'])
   })
 
   it('cuenta exclusivamente administrativa: al iniciar sesión entra al Dashboard general', async () => {

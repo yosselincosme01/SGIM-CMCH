@@ -165,6 +165,14 @@ function Indicators({ summary }: { summary: HomeSummary }) {
             to={PATHS.verifications}
           />
         )}
+        {summary.surveys && summary.surveys.pending > 0 && (
+          <Indicator
+            value={summary.surveys.pending}
+            label="Encuestas pendientes"
+            hint="Evalúa la atención de tus incidencias cerradas"
+            to={PATHS.myIncidents}
+          />
+        )}
         {own && (
           <Indicator
             value={ownOpen}

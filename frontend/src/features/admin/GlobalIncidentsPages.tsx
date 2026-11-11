@@ -11,6 +11,7 @@ import { LoadingState } from '../../shared/ui/LoadingState'
 import type { IncidentDetail, Page } from '../incidents/api'
 import { IncidentHistory, IncidentSummaryCard } from '../incidents/IncidentDetailSections'
 import { InterventionHistory } from '../incidents/InterventionHistory'
+import { SurveyHistory } from '../incidents/SatisfactionSurvey'
 import { StatusBadge } from '../incidents/StatusBadge'
 import type { PlanningItem } from '../planning/api'
 import { PriorityBadge } from '../planning/PlanningParts'
@@ -402,6 +403,7 @@ export function GlobalIncidentDetailPage() {
           </section>
         )}
         <InterventionHistory interventions={incident.interventions ?? []} />
+        <SurveyHistory surveys={incident.surveys ?? []} />
         <IncidentHistory events={incident.events} />
       </div>
 
