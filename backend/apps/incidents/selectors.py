@@ -208,6 +208,22 @@ def pending_verification_expression():
     )
 
 
+def survey_pending_expression():
+    """True si el cierre vigente aún no tiene encuesta del solicitante (ADR 0012)."""
+    from .models import SatisfactionSurvey
+
+    answered = SatisfactionSurvey.objects.filter(
+        closing_intervention_id=OuterRef("closing_intervention_id")
+    )
+    return Case(
+        When(~Q(status=Incident.Status.CERRADA), then=Value(False)),
+        When(closing_intervention__isnull=True, then=Value(False)),
+        When(Exists(answered), then=Value(False)),
+        default=Value(True),
+        output_field=BooleanField(),
+    )
+
+
 def planning_incidents(user) -> QuerySet[Incident]:
     """
     Bandeja del Planificador: todas las incidencias de las áreas que planifica y, de

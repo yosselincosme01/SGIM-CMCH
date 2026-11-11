@@ -11,10 +11,12 @@ from .views import (
     IncidentPlanningView,
     IncidentPriorityView,
     IncidentReopenView,
+    IncidentSurveyView,
     IncidentTechniciansView,
     IncidentVerificationView,
     PlanningListView,
     PlanningOptionsView,
+    SurveyReminderView,
 )
 
 app_name = "incidents"
@@ -26,6 +28,7 @@ urlpatterns = [
     path("incidents/", IncidentListCreateView.as_view(), name="list"),
     path("incidents/options/", IncidentOptionsView.as_view(), name="options"),
     path("incidents/summary/", HomeSummaryView.as_view(), name="summary"),
+    path("incidents/survey-reminder/", SurveyReminderView.as_view(), name="survey-reminder"),
     path("incidents/planning/", PlanningListView.as_view(), name="planning-list"),
     path("incidents/planning/options/", PlanningOptionsView.as_view(), name="planning-options"),
     path("incidents/attention/", AttentionListView.as_view(), name="attention-list"),
@@ -53,4 +56,5 @@ urlpatterns = [
         name="verification",
     ),
     re_path(rf"^incidents/{CODE}/reopen/$", IncidentReopenView.as_view(), name="reopen"),
+    re_path(rf"^incidents/{CODE}/survey/$", IncidentSurveyView.as_view(), name="survey"),
 ]
