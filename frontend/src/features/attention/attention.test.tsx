@@ -348,6 +348,35 @@ describe('verificación y reapertura', () => {
     )
   })
 
+  it('quien verifica en el área ve la evaluación del solicitante, distinta de la verificación', async () => {
+    const incident = seedClosed()
+    incident.surveys = [
+      {
+        closure: 2,
+        closed_at: '2026-11-05T15:00:00-05:00',
+        rating: 3,
+        comment: 'Resolvieron, pero tardaron (ficticio).',
+        created_at: '2026-11-06T09:00:00-05:00',
+      },
+    ]
+    signIn(USERS.multirol)
+    renderApp(`/verificaciones/incidencias/${incident.code}`)
+
+    const history = await screen.findByRole('region', { name: 'Satisfacción del solicitante' })
+    expect(within(history).getByLabelText('3 de 5 estrellas')).toBeInTheDocument()
+    expect(history).toHaveTextContent('independiente de la verificación técnica')
+    expect(screen.getByRole('button', { name: 'Registrar verificación' })).toBeInTheDocument()
+  })
+
+  it('sin evaluaciones autorizadas no se muestra la sección', async () => {
+    const incident = seedClosed()
+    signIn(USERS.multirol)
+    renderApp(`/verificaciones/incidencias/${incident.code}`)
+
+    await screen.findByRole('heading', { name: 'Cierre técnico' })
+    expect(screen.queryByRole('region', { name: 'Satisfacción del solicitante' })).not.toBeInTheDocument()
+  })
+
   it('en Verificaciones el detalle no ofrece planificar', async () => {
     const incident = seedClosed()
     signIn(USERS.multirol)

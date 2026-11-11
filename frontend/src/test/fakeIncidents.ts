@@ -136,6 +136,7 @@ function summary(incident: IncidentDetail) {
     support_area: incident.support_area,
     created_at: incident.created_at,
     has_attachments: incident.attachments.length > 0,
+    survey_pending: Boolean((incident as { survey_pending?: boolean }).survey_pending),
   }
 }
 

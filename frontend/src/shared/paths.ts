@@ -28,6 +28,8 @@ export const PATHS = {
 } as const
 
 export const myIncidentPath = (code: string) => withCode(PATHS.myIncidents, code)
+/** Detalle propio con la encuesta lista para responder (lo pidió la persona, ADR 0012). */
+export const evaluateSurveyPath = (code: string) => `${myIncidentPath(code)}?evaluar=1`
 export const attentionIncidentPath = (code: string) => withCode(`${PATHS.attention}/incidencias`, code)
 export const planningIncidentPath = (code: string) => withCode(`${PATHS.planning}/incidencias`, code)
 export const verificationIncidentPath = (code: string) =>

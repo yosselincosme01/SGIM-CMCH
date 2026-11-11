@@ -552,3 +552,53 @@ class IncidentVerification(models.Model):
 
     def __str__(self) -> str:
         return f"{self.incident} · {self.get_result_display()}"
+
+
+class SatisfactionSurvey(models.Model):
+    """
+    Encuesta de satisfacción del solicitante sobre un cierre técnico (ADR 0012).
+
+    - Es **voluntaria** y la responde solo quien registró la incidencia.
+    - Se relaciona con el **cierre técnico** concreto (la intervención "Solucionado"),
+      como la verificación: una por cierre. Si el ticket se reabre y vuelve a cerrarse,
+      el nuevo cierre admite otra encuesta; las anteriores se conservan.
+    - Es **independiente de la verificación técnica**: no cambia el estado del ticket,
+      no aprueba la conformidad ni provoca una reapertura.
+    - Solo adición: no se edita ni se borra.
+    """
+
+    RATING_MIN = 1
+    RATING_MAX = 5
+
+    incident = models.ForeignKey(
+        Incident, on_delete=models.PROTECT, related_name="satisfaction_surveys"
+    )
+    closing_intervention = models.OneToOneField(
+        IncidentIntervention,
+        on_delete=models.PROTECT,
+        related_name="satisfaction_survey",
+        verbose_name="cierre evaluado",
+    )
+    respondent = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="+",
+        verbose_name="respondida por",
+    )
+    rating = models.PositiveSmallIntegerField("calificación")
+    comment = models.TextField("comentario", blank=True)
+    created_at = models.DateTimeField("respondida", auto_now_add=True)
+
+    class Meta:
+        verbose_name = "encuesta de satisfacción"
+        verbose_name_plural = "encuestas de satisfacción"
+        ordering = ("created_at", "id")
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(rating__gte=1) & Q(rating__lte=5),
+                name="satisfaction_rating_1_to_5",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.incident} · {self.rating}/5"

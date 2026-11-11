@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 
 from django.conf import settings
 from django.core.exceptions import PermissionDenied, ValidationError
-from django.db.models import Count, Min, QuerySet
+from django.db.models import Avg, Count, Min, QuerySet
 
 from apps.accounts.roles import Role, has_role
 from apps.incidents import selectors
@@ -25,6 +25,7 @@ from apps.incidents.models import (
     IncidentEvent,
     IncidentIntervention,
     IncidentVerification,
+    SatisfactionSurvey,
     SupportArea,
 )
 
@@ -133,6 +134,40 @@ def _breakdown(queryset, field, label_field=None, empty="Sin dato") -> list[dict
     ]
 
 
+def compute_satisfaction(incidents: QuerySet[Incident]) -> dict:
+    """
+    Satisfacción del solicitante por cierre técnico (ADR 0012), sin duplicados:
+
+    - ``eligible``: cierres técnicos (intervenciones "Solucionado") de las incidencias
+      del alcance. Cada cierre cuenta una vez, aunque el ticket se haya reabierto.
+    - ``answered``: encuestas respondidas sobre esos cierres.
+    - ``pending``: cierres vigentes aún sin respuesta (todavía se pueden evaluar).
+    - ``expired``: cierres sin respuesta que dejaron de ser evaluables al reabrirse.
+    - ``average``: promedio de las calificaciones respondidas (1 a 5). Una encuesta no
+      respondida no cuenta como insatisfacción.
+    - ``response_rate``: respondidas / elegibles, en porcentaje.
+    """
+    eligible = IncidentIntervention.objects.filter(
+        incident__in=incidents, result=IncidentIntervention.Result.SOLVED
+    ).count()
+    answered = SatisfactionSurvey.objects.filter(incident__in=incidents)
+    total_answered = answered.count()
+    pending = incidents.filter(
+        status=Incident.Status.CERRADA,
+        closing_intervention__isnull=False,
+        closing_intervention__satisfaction_survey__isnull=True,
+    ).count()
+    average = answered.aggregate(value=Avg("rating"))["value"]
+    return {
+        "eligible": eligible,
+        "answered": total_answered,
+        "pending": pending,
+        "expired": max(eligible - total_answered - pending, 0),
+        "average": round(average, 2) if average is not None else None,
+        "response_rate": round(total_answered * 100 / eligible, 1) if eligible else None,
+    }
+
+
 def compute_dashboard(incidents: QuerySet[Incident]) -> dict:
     tickets = incidents.annotate(last_result=selectors.latest_intervention_result_subquery())
     status_counts = dict(incidents.values_list("status").annotate(total=Count("id")))
@@ -207,4 +242,6 @@ def compute_dashboard(incidents: QuerySet[Incident]) -> dict:
         "by_area": _breakdown(incidents, "support_area__code", "support_area__name"),
         "by_care_unit": _breakdown(incidents, "care_unit__code", "care_unit__name"),
         "by_priority": _breakdown(incidents, "priority__code", "priority__name", "Sin prioridad"),
+        # Satisfacción del solicitante (ADR 0012): independiente de la verificación.
+        "satisfaction": compute_satisfaction(incidents),
     }

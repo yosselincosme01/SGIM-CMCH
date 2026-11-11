@@ -7,6 +7,7 @@ import {
   type QrCaptureMethod,
   statusFor,
 } from './equipment'
+import type { SurveyAnswer } from './surveyApi'
 
 export interface CareUnitOption {
   code: string
@@ -32,6 +33,8 @@ export interface IncidentSummary {
   support_area: SupportAreaOption
   created_at: string
   has_attachments: boolean
+  /** Mis incidencias: cierre vigente pendiente de evaluar (ADR 0012). */
+  survey_pending?: boolean
 }
 
 export interface IncidentAttachment {
@@ -153,6 +156,11 @@ export interface IncidentDetail extends Omit<IncidentSummary, 'has_attachments'>
   interventions?: Intervention[]
   closure?: Closure | null
   permissions?: IncidentPermissions
+  /**
+   * Evaluaciones del solicitante (ADR 0012). Solo llegan con contenido a quien planifica
+   * o verifica en el área, y al Administrador en la consulta global.
+   */
+  surveys?: SurveyAnswer[]
   /** Vista del solicitante: fecha del cierre técnico vigente. */
   closed_at?: string | null
 }

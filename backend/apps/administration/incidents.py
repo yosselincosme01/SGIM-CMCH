@@ -22,6 +22,7 @@ from apps.incidents.serializers import (
     InterventionSerializer,
     PlanningListSerializer,
     display_time_zone,
+    surveys_of,
 )
 
 
@@ -57,6 +58,10 @@ class AdminIncidentDetailSerializer(IncidentDetailSerializer):
             if f not in ("attachments", "permissions")
         ) + ("attachment_count",)
         read_only_fields = fields
+
+    def get_surveys(self, incident) -> list[dict]:
+        # El Administrador consulta todas las evaluaciones, en modo lectura (ADR 0012).
+        return surveys_of(incident)
 
     def get_attachment_count(self, incident) -> int:
         return sum(1 for a in incident.attachments.all() if a.intervention_id is None)

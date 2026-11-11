@@ -18,7 +18,7 @@ from rest_framework.views import APIView
 from apps.accounts.permissions import IsOperationalUser, IsPersonalAtencion, IsPlanificador
 from apps.catalogs.models import CareUnit
 
-from . import attention_services, home, planning_services, selectors, services
+from . import attention_services, home, planning_services, selectors, services, survey_services
 from .models import Incident, PriorityLevel, SupportArea
 from .serializers import (
     AttentionListSerializer,
@@ -27,13 +27,16 @@ from .serializers import (
     IncidentDetailSerializer,
     IncidentListSerializer,
     InterventionInputSerializer,
+    LimaDateTimeField,
     PlanningInputSerializer,
     PlanningListSerializer,
     PriorityInputSerializer,
     PriorityLevelSerializer,
     ReopenInputSerializer,
     RequesterIncidentDetailSerializer,
+    SatisfactionSurveySerializer,
     SupportAreaOptionSerializer,
+    SurveyInputSerializer,
     TechnicianSerializer,
     VerificationInputSerializer,
     display_time_zone,
@@ -155,7 +158,9 @@ class IncidentListCreateView(generics.ListAPIView):
     def get_queryset(self):
         scope = self.request.query_params.get("scope", "mine")
         if scope == "mine":
-            return selectors.own_incidents(self.request.user)
+            return selectors.own_incidents(self.request.user).annotate(
+                survey_pending_flag=selectors.survey_pending_expression()
+            )
         if scope == "area":
             if not selectors.can_view_area_inbox(self.request.user):
                 raise PermissionDenied("No tienes una función autorizada en ningún área.")
@@ -548,3 +553,104 @@ class IncidentReopenView(_PlanningActionView):
             **serializer.validated_data,
         )
         return _detail_response(request, incident)
+
+
+# --- Encuesta de satisfacción (ADR 0012) ------------------------------------------------
+
+
+class IncidentSurveyView(_PlanningActionView):
+    """
+    GET  Estado de la encuesta: el cierre vigente pendiente de evaluar (si lo hay) y las
+         evaluaciones anteriores del propio solicitante.
+    POST Envía la evaluación del cierre vigente (``closure``, ``rating`` 1-5 y
+         ``comment`` opcional).
+
+    Solo el solicitante original. Una incidencia ajena responde 404; una del área que
+    el usuario no registró, 403.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get_incident(self, request: Request, code: str) -> Incident:
+        incident = _visible_incident_or_404(request, code)
+        if not survey_services.is_requester(request.user, incident):
+            raise PermissionDenied(survey_services.NOT_REQUESTER)
+        return incident
+
+    def _state(self, incident: Incident) -> dict:
+        incident = Incident.objects.select_related("closing_intervention").get(pk=incident.pk)
+        closure = survey_services.evaluable_closure(incident)
+        history = incident.satisfaction_surveys.select_related("closing_intervention").order_by(
+            "-created_at", "-id"
+        )
+        return {
+            "code": incident.code,
+            "pending": (
+                {
+                    "closure": closure.pk,
+                    "closed_at": LimaDateTimeField().to_representation(closure.created_at),
+                }
+                if closure
+                else None
+            ),
+            "history": SatisfactionSurveySerializer(history, many=True).data,
+        }
+
+    def get(self, request: Request, code: str) -> Response:
+        return Response(self._state(self.get_incident(request, code)))
+
+    def post(self, request: Request, code: str) -> Response:
+        incident = self.get_incident(request, code)
+        serializer = SurveyInputSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        self.run(
+            survey_services.submit_survey,
+            incident=incident,
+            actor=request.user,
+            closing_intervention_id=data["closure"],
+            rating=data["rating"],
+            comment=data["comment"],
+        )
+        return Response(self._state(incident), status=status.HTTP_201_CREATED)
+
+
+class SurveyReminderView(APIView):
+    """
+    Recordatorio de encuestas pendientes al iniciar sesión (ADR 0012).
+
+    GET  ``show`` indica si corresponde mostrarlo: hay cierres vigentes sin evaluar en
+         incidencias propias y todavía no se mostró en esta sesión. Incluye el total y
+         hasta 5 tickets.
+    POST Marca el recordatorio como mostrado en esta sesión. No registra ninguna
+         respuesta.
+
+    Es pasiva: consultarla no cuenta como actividad del usuario.
+    """
+
+    permission_classes = [IsAuthenticated]
+    session_passive = True
+
+    def get(self, request: Request) -> Response:
+        pending = survey_services.pending_surveys(request.user)
+        total = pending.count()
+        shown = bool(request.session.get(survey_services.REMINDER_SESSION_KEY))
+        return Response(
+            {
+                "show": total > 0 and not shown,
+                "total": total,
+                "items": [
+                    {
+                        "code": incident.code,
+                        "closed_at": LimaDateTimeField().to_representation(
+                            incident.closing_intervention.created_at
+                        ),
+                    }
+                    for incident in pending[: survey_services.REMINDER_ITEMS]
+                ],
+            }
+        )
+
+    def post(self, request: Request) -> Response:
+        request.session[survey_services.REMINDER_SESSION_KEY] = True
+        return Response(status=status.HTTP_204_NO_CONTENT)

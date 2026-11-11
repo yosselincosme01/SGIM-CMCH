@@ -8,6 +8,7 @@ from .models import (
     IncidentIntervention,
     IncidentVerification,
     PriorityLevel,
+    SatisfactionSurvey,
     SupportArea,
     SupportAreaMembership,
 )
@@ -121,6 +122,14 @@ class VerificationInline(_ReadOnlyInline):
     readonly_fields = fields
 
 
+class SatisfactionSurveyInline(_ReadOnlyInline):
+    """Evaluaciones del solicitante por cierre técnico (ADR 0012). Solo lectura."""
+
+    model = SatisfactionSurvey
+    fields = ("created_at", "respondent", "rating", "comment", "closing_intervention")
+    readonly_fields = fields
+
+
 class EventInline(admin.TabularInline):
     model = IncidentEvent
     extra = 0
@@ -172,6 +181,7 @@ class IncidentAdmin(admin.ModelAdmin):
         AssignmentInline,
         InterventionInline,
         VerificationInline,
+        SatisfactionSurveyInline,
         EventInline,
     )
 

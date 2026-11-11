@@ -64,6 +64,7 @@ npm run dev        # http://localhost:5173 (requiere Django en http://127.0.0.1:
 - Navegación unificada por capacidades (menú lateral, sin selector de roles): [ADR 0009](docs/adr/0009-navegacion-por-capacidades.md).
 - Inicio como dashboard operativo personal: [ADR 0010](docs/adr/0010-inicio-dashboard-operativo.md).
 - Panel de Administración: [ADR 0011](docs/adr/0011-panel-de-administracion.md).
+- Encuesta de satisfacción por cierre técnico: [ADR 0012](docs/adr/0012-encuesta-de-satisfaccion.md) y [guía](docs/encuesta-satisfaccion.md).
 - Configurar pertenencias de demostración: [docs/planificacion-pertenencias.md](docs/planificacion-pertenencias.md).
 
 Guía completa para PowerShell: [docs/pruebas.md](docs/pruebas.md).

@@ -49,6 +49,22 @@ export interface Dashboard {
   by_area: Breakdown[]
   by_care_unit: Breakdown[]
   by_priority: Breakdown[]
+  /** Satisfacción del solicitante por cierre técnico (ADR 0012). */
+  satisfaction?: Satisfaction
+}
+
+export interface Satisfaction {
+  /** Cierres técnicos del alcance (cada uno cuenta una vez). */
+  eligible: number
+  answered: number
+  /** Cierres vigentes aún evaluables. */
+  pending: number
+  /** Cierres sin respuesta que dejaron de ser evaluables al reabrirse. */
+  expired: number
+  /** Promedio de 1 a 5; ``null`` sin respuestas. */
+  average: number | null
+  /** Respondidas / elegibles, en porcentaje; ``null`` sin cierres. */
+  response_rate: number | null
 }
 
 export function query(filters: MetricFilters): string {

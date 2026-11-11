@@ -6,16 +6,19 @@ interface DialogProps {
   actions: ReactNode
   /** `alertdialog` para avisos que requieren una decisión del usuario. */
   role?: 'dialog' | 'alertdialog'
+  /** Si se indica, Escape cierra el diálogo (para diálogos que se pueden descartar). */
+  onEscape?: () => void
 }
 
-const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]), [tabindex]:not([tabindex="-1"])'
+const FOCUSABLE =
+  'button:not([disabled]), a[href], input:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
 /**
  * Diálogo modal accesible: mueve el foco al primer botón, lo mantiene dentro del
  * diálogo y lo devuelve al elemento anterior al cerrarse. El contenido de fondo debe
  * marcarse como `inert` por quien lo usa.
  */
-export function Dialog({ title, children, actions, role = 'alertdialog' }: DialogProps) {
+export function Dialog({ title, children, actions, role = 'alertdialog', onEscape }: DialogProps) {
   const titleId = useId()
   const bodyId = useId()
   const panelRef = useRef<HTMLDivElement>(null)
@@ -27,6 +30,11 @@ export function Dialog({ title, children, actions, role = 'alertdialog' }: Dialo
   }, [])
 
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === 'Escape' && onEscape) {
+      event.preventDefault()
+      onEscape()
+      return
+    }
     if (event.key !== 'Tab') return
     const items = [...(panelRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE) ?? [])]
     if (items.length === 0) return

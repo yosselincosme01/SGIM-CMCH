@@ -5,6 +5,7 @@ import { PATHS } from '../../shared/paths'
 import { Button } from '../../shared/ui/Button'
 import { InstitutionLogo } from '../../shared/ui/InstitutionLogo'
 import { useAuth, useCurrentUser } from '../auth/useAuth'
+import { SurveyReminder } from '../incidents/SurveyReminder'
 import { activeItemPath, buildMenu, homePath } from '../navigation/access'
 import { SessionMonitor } from '../session/SessionMonitor'
 
@@ -66,6 +67,8 @@ export function AppLayout() {
   const [drawerPath, setDrawerPath] = useState<string | null>(null)
   const drawerOpen = drawerPath === location.pathname
   const [signingOut, setSigningOut] = useState(false)
+  // Recordatorio de encuestas pendientes (ADR 0012): con el modal abierto, el fondo es inerte.
+  const [reminderOpen, setReminderOpen] = useState(false)
   const toggleRef = useRef<HTMLButtonElement>(null)
   const sidebarRef = useRef<HTMLElement>(null)
 
@@ -118,7 +121,7 @@ export function AppLayout() {
       <a className="skip-link" href="#contenido">
         Saltar al contenido
       </a>
-      <header className="topbar">
+      <header className="topbar" inert={reminderOpen} aria-hidden={reminderOpen || undefined}>
         <div className="topbar__inner">
 
           {/* Logotipo institucional en el extremo izquierdo, en todas las vistas internas. */}
@@ -170,7 +173,7 @@ export function AppLayout() {
         </div>
       </header>
 
-      <div className={shellClass}>
+      <div className={shellClass} inert={reminderOpen} aria-hidden={reminderOpen || undefined}>
         <nav
           id="menu-principal"
           ref={sidebarRef}
@@ -210,6 +213,9 @@ export function AppLayout() {
           <Outlet />
         </main>
       </div>
+
+      {/* La clave por usuario evita que un recordatorio pase de una cuenta a otra. */}
+      <SurveyReminder key={user.id} onOpenChange={setReminderOpen} />
 
       <footer className="footer">
         <p>SGIM-CMCH · Uso exclusivo del personal autorizado. Tu cuenta es personal.</p>

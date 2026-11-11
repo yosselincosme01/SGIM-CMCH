@@ -18,6 +18,8 @@ El Inicio deja de repetir el menú y muestra solo dos bloques, más un botón:
 
 1. **Resumen:** indicadores compactos, cada uno enlazado a su sección. Solo aparecen los
    de las capacidades que la persona tiene.
+   - **Encuestas pendientes** ([ADR 0012](0012-encuesta-de-satisfaccion.md)): solo si hay
+     cierres vigentes sin evaluar en incidencias propias; lleva a "Mis incidencias".
 2. **Requiere tu atención:** tickets reales que necesitan una acción de la persona, con
    su estado, la fecha que corresponde y un enlace a la operación (Atender, Verificar,
    Planificar o Revisar).
@@ -42,11 +44,12 @@ actividad reciente.
 - Se calcula con los mismos selectores de permisos que las bandejas existentes, así que
   nunca muestra más que ellas.
 - Las secciones sin capacidad llegan como `null`.
-- `surveys` es siempre `null` hasta la Etapa 3.
+- `surveys` trae las encuestas pendientes de las incidencias propias (ADR 0012).
 
 | Indicador | Capacidad | Fuente (misma regla que la sección) |
 |---|---|---|
 | Mis incidencias abiertas y por estado | Cuenta operativa | `own_incidents`: lo que ve "Mis incidencias" |
+| Encuestas pendientes | Cuenta operativa | Cierres vigentes sin evaluar de sus incidencias propias (ADR 0012) |
 | Atenciones asignadas | `can_attend` | Asignación vigente de la persona, ticket `asignada`, en sus áreas de atención |
 | Por programar | `can_plan` | Tickets `registrada` o `reabierta` de las áreas que planifica |
 | Con atención pendiente | `can_plan` | `pending_queue`: última intervención En proceso o No solucionado |
@@ -70,4 +73,4 @@ actividad reciente.
 - El Inicio responde "qué tengo que hacer" sin repetir la navegación.
 - El endpoint hace unas pocas consultas agregadas y limitadas: los conteos se hacen en
   la base de datos y solo se cargan los primeros elementos de cada lista.
-- Cuando exista la Etapa 3, las encuestas pendientes se añadirán como otro indicador.
+- Las encuestas pendientes (Etapa 3) se muestran como otro indicador del resumen.

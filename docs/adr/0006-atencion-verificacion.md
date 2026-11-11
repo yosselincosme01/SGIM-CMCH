@@ -2,6 +2,7 @@
 
 - **Estado:** propuesto. Implementado en `feature/incident-attention-workflow`.
 - **Actualizado por:** [ADR 0008](0008-funciones-independientes-por-area.md). Verificar conformidad es una función propia (`can_verify`), separada de planificar y sin exigir el rol Planificador, y toda cuenta operativa registra incidencias.
+- **Relacionado:** [ADR 0012](0012-encuesta-de-satisfaccion.md): la satisfacción del solicitante se evalúa por cierre técnico y es independiente de la verificación.
 - **Fecha:** 2026-11-07
 - **Relacionado:** [ADR 0004](0004-planificacion.md) (planificación y permisos por área),
   [ADR 0005](0005-identificacion-qr.md) (evidencia fotográfica)

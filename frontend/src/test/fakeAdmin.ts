@@ -100,6 +100,14 @@ export const DASHBOARD = {
   by_area: [{ key: 'ti', label: 'TI', total: 3 }],
   by_care_unit: [{ key: 'demo-emergencia', label: '[DEMO] Emergencia', total: 4 }],
   by_priority: [{ key: '', label: 'Sin prioridad', total: 1 }],
+  satisfaction: {
+    eligible: 4,
+    answered: 2,
+    pending: 1,
+    expired: 1,
+    average: 4.5,
+    response_rate: 50,
+  },
 }
 
 const AREA_TI = { code: 'ti', name: 'TI' }
@@ -180,6 +188,15 @@ export const GLOBAL_DETAIL = {
     },
   ],
   closure: null,
+  surveys: [
+    {
+      closure: 1,
+      closed_at: '2026-11-05T18:00:00Z',
+      rating: 5,
+      comment: 'Muy buena atención (ficticio).',
+      created_at: '2026-11-06T09:00:00Z',
+    },
+  ],
 }
 
 export const AUDIT = [
@@ -258,6 +275,7 @@ export const adminHandlers = [
       reports: [
         { code: 'incidents', label: 'Incidencias generales' },
         { code: 'pending', label: 'Pendientes' },
+        { code: 'satisfaction', label: 'Satisfacción del solicitante' },
       ],
       max_rows: 5000,
       max_range_days: 366,

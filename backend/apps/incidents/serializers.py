@@ -24,6 +24,7 @@ from .models import (
     IncidentIntervention,
     IncidentVerification,
     PriorityLevel,
+    SatisfactionSurvey,
     SupportArea,
 )
 
@@ -193,6 +194,8 @@ class _IncidentBaseSerializer(serializers.ModelSerializer):
 
 class IncidentListSerializer(_IncidentBaseSerializer):
     has_attachments = serializers.SerializerMethodField()
+    # Cierre vigente pendiente de evaluar por el solicitante (ADR 0012).
+    survey_pending = serializers.SerializerMethodField()
 
     class Meta:
         model = Incident
@@ -204,8 +207,12 @@ class IncidentListSerializer(_IncidentBaseSerializer):
             "support_area",
             "created_at",
             "has_attachments",
+            "survey_pending",
         )
         read_only_fields = fields
+
+    def get_survey_pending(self, incident) -> bool:
+        return bool(getattr(incident, "survey_pending_flag", False))
 
     def get_has_attachments(self, incident) -> bool:
         flag = getattr(incident, "has_attachments_flag", None)
@@ -387,6 +394,28 @@ class InterventionSerializer(serializers.ModelSerializer):
         return VerificationSerializer(verification).data if verification else None
 
 
+class SatisfactionSurveySerializer(serializers.ModelSerializer):
+    """Evaluación del solicitante sobre un cierre técnico (ADR 0012)."""
+
+    closure = serializers.IntegerField(source="closing_intervention_id", read_only=True)
+    closed_at = LimaDateTimeField(source="closing_intervention.created_at", read_only=True)
+    created_at = LimaDateTimeField(read_only=True)
+
+    class Meta:
+        model = SatisfactionSurvey
+        fields = ("closure", "closed_at", "rating", "comment", "created_at")
+        read_only_fields = fields
+
+
+def surveys_of(incident) -> list[dict]:
+    queryset = (
+        SatisfactionSurvey.objects.filter(incident=incident)
+        .select_related("closing_intervention")
+        .order_by("created_at", "id")
+    )
+    return SatisfactionSurveySerializer(queryset, many=True).data
+
+
 class IncidentDetailSerializer(_IncidentDetailBase):
     """
     Detalle para el personal del área (Planificador o técnico autorizado): incluye
@@ -401,6 +430,7 @@ class IncidentDetailSerializer(_IncidentDetailBase):
     interventions = InterventionSerializer(many=True, read_only=True)
     closure = serializers.SerializerMethodField()
     permissions = serializers.SerializerMethodField()
+    surveys = serializers.SerializerMethodField()
 
     class Meta:
         model = Incident
@@ -411,8 +441,20 @@ class IncidentDetailSerializer(_IncidentDetailBase):
             "interventions",
             "closure",
             "permissions",
+            "surveys",
         )
         read_only_fields = fields
+
+    def get_surveys(self, incident) -> list[dict]:
+        """
+        Evaluaciones del solicitante (ADR 0012): solo para quien planifica o verifica en
+        el área de la incidencia. Un técnico no ve las calificaciones ni los comentarios.
+        """
+        user = self.context["request"].user
+        area = incident.support_area
+        if selectors.can_plan_area(user, area) or selectors.can_verify_area(user, area):
+            return surveys_of(incident)
+        return []
 
     def get_closure(self, incident) -> dict | None:
         """Cierre técnico vigente y su verificación (``None`` si está abierta)."""
@@ -718,3 +760,13 @@ class VerificationInputSerializer(_StrictInputSerializer):
 
 class ReopenInputSerializer(_StrictInputSerializer):
     reason = serializers.CharField(required=False, allow_blank=True, default="", max_length=5000)
+
+
+class SurveyInputSerializer(_StrictInputSerializer):
+    """Respuesta del solicitante. El servicio vuelve a validar todo (ADR 0012)."""
+
+    closure = serializers.IntegerField()
+    rating = serializers.IntegerField(
+        error_messages={"invalid": "Selecciona una calificación de 1 a 5 estrellas."}
+    )
+    comment = serializers.CharField(required=False, allow_blank=True, default="", max_length=5000)

@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router'
 import { isApiError } from '../../shared/api/errors'
 import { useDocumentTitle } from '../../shared/hooks/useDocumentTitle'
 import { PATHS } from '../../shared/paths'
+import { SurveyPanel } from './SatisfactionSurvey'
 import { Alert } from '../../shared/ui/Alert'
 import { LoadingState } from '../../shared/ui/LoadingState'
 import { fetchIncident, type IncidentDetail } from './api'
@@ -22,6 +23,7 @@ type LoadState =
 export function IncidentDetailPage() {
   const { code = '' } = useParams()
   const [state, setState] = useState<LoadState>({ status: 'loading' })
+  const [blocked, setBlocked] = useState(false)
   useDocumentTitle(state.status === 'ready' ? state.incident.code : 'Detalle de incidencia')
 
   useEffect(() => {
@@ -66,7 +68,7 @@ export function IncidentDetailPage() {
 
   const { incident } = state
   return (
-    <div className="stack">
+    <div className="stack" inert={blocked} aria-hidden={blocked || undefined}>
       <IncidentBreadcrumb current={incident.code} throughList />
       <header className="page__header page__header--with-action">
         <div>
@@ -102,6 +104,9 @@ export function IncidentDetailPage() {
           <p className="muted">La fecha es estimada y el área de soporte puede reprogramarla.</p>
         </section>
       )}
+
+      {/* Encuesta voluntaria del cierre vigente y evaluaciones anteriores (ADR 0012). */}
+      <SurveyPanel code={incident.code} onDialogChange={setBlocked} />
 
       <IncidentSummaryCard incident={incident} />
       <IncidentEvidence incident={incident} />

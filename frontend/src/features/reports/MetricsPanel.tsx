@@ -4,6 +4,7 @@ import { isApiError } from '../../shared/api/errors'
 import { limaToday } from '../../shared/dates'
 import { Alert } from '../../shared/ui/Alert'
 import { Button } from '../../shared/ui/Button'
+import { SatisfactionSummary } from './SatisfactionSummary'
 import { LoadingState } from '../../shared/ui/LoadingState'
 import {
   type Breakdown,
@@ -65,7 +66,6 @@ export function MetricsPanel({ mode }: { mode: 'indicators' | 'reports' }) {
   }, [])
 
   useEffect(() => {
-    if (mode !== 'indicators') return
     const controller = new AbortController()
     fetchDashboard(applied, controller.signal)
       .then((data) => {
@@ -198,7 +198,9 @@ export function MetricsPanel({ mode }: { mode: 'indicators' | 'reports' }) {
         </Alert>
       )}
 
-      {mode === 'reports' ? null : !dashboard ? (
+      {mode === 'reports' ? (
+        <SatisfactionSummary data={dashboard?.satisfaction} />
+      ) : !dashboard ? (
         <LoadingState label="Calculando indicadores…" />
       ) : (
         <>
@@ -250,6 +252,7 @@ export function MetricsPanel({ mode }: { mode: 'indicators' | 'reports' }) {
             <BreakdownTable title="Por UPS / servicio" rows={dashboard.by_care_unit} />
             <BreakdownTable title="Intervenciones por resultado" rows={dashboard.interventions.by_result} />
           </div>
+          <SatisfactionSummary data={dashboard.satisfaction} />
         </>
       )}
 

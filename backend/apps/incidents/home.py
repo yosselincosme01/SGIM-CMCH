@@ -97,6 +97,16 @@ def _planning_querysets(user) -> tuple[QuerySet[Incident], QuerySet[Incident]]:
     return to_schedule, follow_up
 
 
+def _surveys_section(user) -> dict:
+    """Cierres vigentes de sus incidencias que aún puede evaluar."""
+    pending = selectors.own_incidents(user).filter(
+        status=Incident.Status.CERRADA,
+        closing_intervention__isnull=False,
+        closing_intervention__satisfaction_survey__isnull=True,
+    )
+    return {"pending": pending.count()}
+
+
 def build_summary(user) -> dict:
     """Resumen del Inicio. Las secciones sin capacidad no se incluyen (valen ``None``)."""
     capabilities = selectors.effective_capabilities(user)
@@ -105,8 +115,8 @@ def build_summary(user) -> dict:
         "attention": None,
         "planning": None,
         "verification": None,
-        # Encuestas de satisfacción: Etapa 3. No existen todavía.
-        "surveys": None,
+        # Encuestas de satisfacción pendientes de sus propias incidencias (ADR 0012).
+        "surveys": _surveys_section(user) if is_operational(user) else None,
     }
     # (consulta, acción, etiqueta de la fecha, fecha) en orden de prioridad.
     sources: list[tuple] = []

@@ -14,6 +14,7 @@ import type { PlanningItem } from '../planning/api'
 import { type Dashboard, fetchDashboard, fetchReportOptions, type ReportOptions } from '../reports/api'
 import { fetchGlobalIncidents } from './api'
 import { DistributionBars } from './DistributionBars'
+import { SatisfactionSummary } from '../reports/SatisfactionSummary'
 
 /** Estados reales del sistema, en el orden del ciclo (ADR 0006). */
 const STATUSES = [
@@ -227,6 +228,8 @@ export function AdminDashboardPage() {
             <DistributionBars id="panel-by-status" title="Por estado" rows={statusRows} total={dashboard.tickets.total} />
             <DistributionBars id="panel-by-area" title="Por área de soporte" rows={areaRows} total={dashboard.tickets.total} />
           </div>
+
+          <SatisfactionSummary data={dashboard.satisfaction} />
 
           <section className="detail-card" aria-labelledby="panel-recent">
             <div className="detail-card__header">
