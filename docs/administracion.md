@@ -67,6 +67,10 @@ consulta.
 - **Responsable de Área:** en **Análisis → Indicadores** y **Análisis → Reportes** ve solo
   las áreas que planifica.
 - **Filtros:** fecha de registro (hasta 366 días), área y estado.
+- **Satisfacción del solicitante:** promedio, respondidas, pendientes y tasa de
+  respuesta, y el reporte Excel «Satisfacción del solicitante»
+  ([ADR 0012](adr/0012-encuesta-de-satisfaccion.md)). Es la opinión voluntaria del
+  solicitante, distinta de la verificación técnica.
 - **Límite:** 5000 filas por descarga.
 - Cada descarga queda en la auditoría.
 
