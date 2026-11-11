@@ -75,8 +75,8 @@ describe('recordatorio al iniciar sesión', () => {
 
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(surveyBackend.requests).toHaveLength(0) // ninguna respuesta registrada
-    // El acceso permanente sigue en Inicio (indicador de encuestas pendientes).
-    expect(await screen.findByRole('link', { name: 'Encuestas pendientes: 1' })).toBeInTheDocument()
+    // El acceso permanente sigue en Inicio (tarjeta de encuestas pendientes).
+    expect(await screen.findByRole('region', { name: 'Tienes 1 encuesta pendiente' })).toBeInTheDocument()
     const nav = screen.getByRole('navigation', { name: 'Menú principal' })
     await user.click(within(nav).getByRole('link', { name: 'Mis incidencias' }))
     expect(await screen.findByText('Evaluación pendiente')).toBeInTheDocument()
@@ -154,6 +154,7 @@ describe('una sola vez por sesión', () => {
     await screen.findByRole('dialog', { name: 'Encuesta de satisfacción pendiente' })
     await user.click(screen.getByRole('button', { name: 'Ahora no' }))
 
+    await user.click(screen.getByRole('button', { name: /Menú de perfil/ }))
     await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
     await screen.findByRole('heading', { name: 'Iniciar sesión' })
     await fillLogin(user, 'ana.prueba')
@@ -168,6 +169,7 @@ describe('una sola vez por sesión', () => {
     await screen.findByRole('dialog', { name: 'Encuesta de satisfacción pendiente' })
     await user.click(screen.getByRole('button', { name: 'Ahora no' }))
 
+    await user.click(screen.getByRole('button', { name: /Menú de perfil/ }))
     await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
     await screen.findByRole('heading', { name: 'Iniciar sesión' })
     await fillLogin(user, 'tec.uno') // sin encuestas propias

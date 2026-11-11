@@ -219,6 +219,33 @@ class IncidentListSerializer(_IncidentBaseSerializer):
         return flag if flag is not None else incident.attachments.exists()
 
 
+DESCRIPTION_PREVIEW_MAX = 100
+
+
+def description_preview(text: str, limit: int = DESCRIPTION_PREVIEW_MAX) -> str:
+    """Descripción en una línea, recortada con «…» si supera ``limit`` caracteres."""
+    text = " ".join(text.split())
+    return text if len(text) <= limit else f"{text[: limit - 1].rstrip()}…"
+
+
+class OwnIncidentListSerializer(IncidentListSerializer):
+    """
+    Mis incidencias: añade una vista previa de la descripción original (unos 100
+    caracteres). Solo se usa con ``scope=mine``, es decir, sobre incidencias propias. Sin
+    evidencias, diagnósticos ni datos técnicos. Lee un campo de la propia fila: no hace
+    consultas adicionales.
+    """
+
+    description_preview = serializers.SerializerMethodField()
+
+    class Meta(IncidentListSerializer.Meta):
+        fields = (*IncidentListSerializer.Meta.fields, "description_preview")
+        read_only_fields = fields
+
+    def get_description_preview(self, incident) -> str:
+        return description_preview(incident.description)
+
+
 class AttachmentSerializer(serializers.ModelSerializer):
     url = serializers.SerializerMethodField()
 

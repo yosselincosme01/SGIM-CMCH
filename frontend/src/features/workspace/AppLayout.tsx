@@ -1,36 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router'
 
-import { PATHS } from '../../shared/paths'
-import { Button } from '../../shared/ui/Button'
 import { InstitutionLogo } from '../../shared/ui/InstitutionLogo'
 import { useAuth, useCurrentUser } from '../auth/useAuth'
 import { SurveyReminder } from '../incidents/SurveyReminder'
 import { activeItemPath, buildMenu, homePath } from '../navigation/access'
 import { SessionMonitor } from '../session/SessionMonitor'
+import { ProfileMenu } from './ProfileMenu'
 
 // Igual que el punto de corte del CSS (styles/index.css).
 const MOBILE_QUERY = '(max-width: 56rem)'
-const COLLAPSED_KEY = 'sgim.sidebar.collapsed'
 
 function matchesMobile(): boolean {
   return typeof window.matchMedia === 'function' && window.matchMedia(MOBILE_QUERY).matches
-}
-
-function readCollapsed(): boolean {
-  try {
-    return window.localStorage.getItem(COLLAPSED_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-function saveCollapsed(value: boolean) {
-  try {
-    window.localStorage.setItem(COLLAPSED_KEY, value ? '1' : '0')
-  } catch {
-    // Sin almacenamiento disponible: la preferencia dura solo esta sesión.
-  }
 }
 
 /** Sigue el ancho de pantalla: en móvil el menú es un panel que se abre y se cierra. */
@@ -53,16 +35,16 @@ function useIsMobile(): boolean {
  *   acceso a "Mi cuenta" y el cierre de sesión.
  * - Menú lateral único, construido con los permisos efectivos del usuario. No hay
  *   selector de roles.
- * - Escritorio: el menú se puede ocultar (la preferencia se recuerda en este equipo).
- *   Móvil: el menú es un panel que se abre con el botón "Menú" y se cierra al elegir una
- *   opción, con Escape o tocando fuera.
+ * - Escritorio: el menú lateral está siempre visible, con ancho fijo y desplazamiento
+ *   vertical propio. No hay botón para ocultarlo.
+ * - Tabletas y móviles: el menú es un panel que se abre con el botón de menú y se cierra
+ *   al elegir una opción, con Escape o tocando fuera.
  */
 export function AppLayout() {
   const user = useCurrentUser()
   const { logout } = useAuth()
   const location = useLocation()
   const mobile = useIsMobile()
-  const [collapsed, setCollapsed] = useState(readCollapsed)
   // El panel móvil queda abierto solo en la ruta donde se abrió: al navegar, se cierra.
   const [drawerPath, setDrawerPath] = useState<string | null>(null)
   const drawerOpen = drawerPath === location.pathname
@@ -74,7 +56,7 @@ export function AppLayout() {
 
   const menu = buildMenu(user)
   const active = activeItemPath(menu, location.pathname)
-  const sidebarVisible = mobile ? drawerOpen : !collapsed
+  const sidebarVisible = mobile ? drawerOpen : true
 
   const closeDrawer = useCallback((returnFocus: boolean) => {
     setDrawerPath(null)
@@ -92,15 +74,8 @@ export function AppLayout() {
     return () => document.removeEventListener('keydown', onKeyDown)
   }, [mobile, drawerOpen, closeDrawer])
 
-  function toggleMenu() {
-    if (mobile) {
-      setDrawerPath(drawerOpen ? null : location.pathname)
-      return
-    }
-    setCollapsed((value) => {
-      saveCollapsed(!value)
-      return !value
-    })
+  function toggleDrawer() {
+    setDrawerPath(drawerOpen ? null : location.pathname)
   }
 
   async function handleLogout() {
@@ -110,7 +85,6 @@ export function AppLayout() {
 
   const shellClass = [
     'shell',
-    !mobile && collapsed ? 'shell--collapsed' : '',
     mobile && drawerOpen ? 'shell--drawer-open' : '',
   ]
     .filter(Boolean)
@@ -136,39 +110,24 @@ export function AppLayout() {
             </span>
           </Link>
 
-          <button
-            ref={toggleRef}
-            type="button"
-            className="menu-toggle"
-            aria-controls="menu-principal"
-            aria-expanded={sidebarVisible}
-            onClick={toggleMenu}
-          >
-            <span className="menu-toggle__icon" aria-hidden="true" />
-            <span className="menu-toggle__label">
-              {sidebarVisible ? 'Ocultar menú' : mobile ? 'Menú' : 'Mostrar menú'}
-            </span>
-          </button>
+          {/* Solo en tabletas y móviles: abre y cierra el panel del menú. */}
+          {mobile && (
+            <button
+              ref={toggleRef}
+              type="button"
+              className="menu-toggle"
+              aria-controls="menu-principal"
+              aria-expanded={drawerOpen}
+              aria-label={drawerOpen ? 'Cerrar menú' : 'Abrir menú'}
+              title={drawerOpen ? 'Cerrar menú' : 'Abrir menú'}
+              onClick={toggleDrawer}
+            >
+              <span className="menu-toggle__icon" aria-hidden="true" />
+            </button>
+          )}
 
           <div className="topbar__controls">
-            <div className="user-menu">
-              <Link
-                to={PATHS.account}
-                className="user-menu__name"
-                title={user.username}
-                aria-label={`Mi cuenta: ${user.full_name}`}
-              >
-                {user.full_name}
-              </Link>
-              <Button
-                variant="ghost"
-                onClick={handleLogout}
-                loading={signingOut}
-                loadingText="Cerrando…"
-              >
-                Cerrar sesión
-              </Button>
-            </div>
+            <ProfileMenu user={user} onLogout={() => void handleLogout()} signingOut={signingOut} />
           </div>
         </div>
       </header>

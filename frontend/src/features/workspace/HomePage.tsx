@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link, Navigate } from 'react-router'
 
 import { isApiError } from '../../shared/api/errors'
-import { formatDateTime } from '../../shared/dates'
+import { formatRelativeDay } from '../../shared/dates'
 import { useDocumentTitle } from '../../shared/hooks/useDocumentTitle'
 import {
   attentionIncidentPath,
+  evaluateSurveyPath,
+  myIncidentPath,
   PATHS,
   planningIncidentPath,
   verificationIncidentPath,
@@ -14,9 +16,14 @@ import { Alert } from '../../shared/ui/Alert'
 import { Button } from '../../shared/ui/Button'
 import { LoadingState } from '../../shared/ui/LoadingState'
 import { useCurrentUser } from '../auth/useAuth'
+import { fetchMyIncidents, type IncidentSummary } from '../incidents/api'
 import { StatusBadge } from '../incidents/StatusBadge'
+import { fetchSurveyReminder, type SurveyReminder } from '../incidents/surveyApi'
 import { canAccess, hasAnyFeature, isAdminOnly } from '../navigation/access'
 import { fetchHomeSummary, type HomeSummary, type TodoItem } from './homeApi'
+import { groupOwnStatuses } from './ownStatusGroups'
+
+const RECENT_LIMIT = 5
 
 const ACTIONS: Record<TodoItem['action'], { label: string; verb: string }> = {
   attend: { label: 'Atención asignada', verb: 'Atender' },
@@ -32,34 +39,54 @@ function todoPath(item: TodoItem): string {
 }
 
 /**
- * Inicio (ADR 0010): dashboard operativo personal. No repite el menú: muestra
- * indicadores y lo que requiere atención, solo con lo que la persona puede hacer en sus
- * áreas. Una cuenta exclusivamente administrativa va al
- * Dashboard general.
+ * Inicio de los trabajadores (ADR 0010, rediseño mobile-first).
+ *
+ * - Saludo y acción principal «Registrar incidencia».
+ * - Resumen de las incidencias propias en tres indicadores.
+ * - Encuestas pendientes (solo si existen), conectadas con la encuesta existente.
+ * - Trabajo de las áreas (solo con capacidades operativas): lo que requiere atención.
+ * - Mis incidencias recientes, con acceso al detalle.
+ *
+ * Una cuenta exclusivamente administrativa va al Dashboard general.
  */
 export function HomePage() {
   useDocumentTitle('Inicio')
   const user = useCurrentUser()
   const adminOnly = isAdminOnly(user)
   const enabled = !adminOnly && hasAnyFeature(user)
+  const ownIncidents = canAccess(user, 'incidents')
+  const operations =
+    canAccess(user, 'attention') || canAccess(user, 'planning') || canAccess(user, 'verifications')
   const [summary, setSummary] = useState<HomeSummary | null>(null)
+  const [recent, setRecent] = useState<IncidentSummary[] | null>(null)
+  const [surveys, setSurveys] = useState<SurveyReminder | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [attempt, setAttempt] = useState(0)
 
   useEffect(() => {
     if (!enabled) return
     const controller = new AbortController()
-    fetchHomeSummary(controller.signal)
-      .then((data) => {
+    Promise.all([
+      fetchHomeSummary(controller.signal),
+      ownIncidents ? fetchMyIncidents(1, controller.signal) : Promise.resolve(null),
+    ])
+      .then(([data, mine]) => {
         setSummary(data)
+        setRecent(mine ? mine.results.slice(0, RECENT_LIMIT) : [])
         setError(null)
+        // Ticket de la encuesta pendiente más reciente (consulta pasiva, solo si hay alguna).
+        if (data.surveys && data.surveys.pending > 0) {
+          fetchSurveyReminder(controller.signal)
+            .then(setSurveys)
+            .catch(() => {})
+        }
       })
       .catch((err: unknown) => {
         if (controller.signal.aborted) return
         setError(isApiError(err) ? err.message : 'No se pudo cargar el resumen.')
       })
     return () => controller.abort()
-  }, [enabled, attempt])
+  }, [enabled, ownIncidents, attempt])
 
   // Al volver a la pestaña se actualiza en segundo plano (no cuenta como actividad).
   useEffect(() => {
@@ -80,22 +107,21 @@ export function HomePage() {
 
   if (adminOnly) return <Navigate to={PATHS.admin} replace />
 
-  const operations = canAccess(user, 'attention') || canAccess(user, 'planning') || canAccess(user, 'verifications')
-
   return (
-    <div className="stack">
-      <header className="page__header page__header--with-action">
+    <div className="home">
+      <header className="home__header">
         <div>
-          <h1 className="page__title">Hola, {user.first_name || user.full_name}</h1>
-          <p className="page__lead">
-            {enabled
-              ? 'Resumen de tu trabajo en el sistema. Las funciones están en el menú.'
-              : 'Tu cuenta todavía no tiene funciones disponibles.'}
+          <h1 className="home__title">Hola, {user.first_name || user.full_name}</h1>
+          <p className="home__lead">
+            {enabled ? '¿En qué podemos ayudarte hoy?' : 'Tu cuenta todavía no tiene funciones disponibles.'}
           </p>
         </div>
-        {canAccess(user, 'incidents') && (
-          <Link to={PATHS.newIncident} className="btn btn--secondary">
-            Registrar incidencia
+        {ownIncidents && (
+          <Link to={PATHS.newIncident} className="btn home__cta">
+            <span>Registrar incidencia</span>
+            <span className="home__cta-chevron" aria-hidden="true">
+              ›
+            </span>
           </Link>
         )}
       </header>
@@ -112,161 +138,179 @@ export function HomePage() {
           </Alert>
           <Button onClick={() => setAttempt((value) => value + 1)}>Reintentar</Button>
         </>
-      ) : !summary ? (
+      ) : !summary || recent === null ? (
         <LoadingState label="Cargando resumen…" />
       ) : (
         <>
-          <Indicators summary={summary} />
-          {operations && <TodoList todo={summary.todo} />}
+          {summary.own && <OwnSummary own={summary.own} />}
+          {summary.surveys && summary.surveys.pending > 0 && (
+            <SurveyCard pending={summary.surveys.pending} reminder={surveys} />
+          )}
+          {operations && <WorkSection summary={summary} />}
+          {ownIncidents && <RecentIncidents incidents={recent} />}
         </>
       )}
     </div>
   )
 }
 
-function Indicators({ summary }: { summary: HomeSummary }) {
-  const own = summary.own
-  const ownOpen = own ? own.by_status.filter((row) => row.key !== 'cerrada').reduce((sum, row) => sum + row.total, 0) : 0
+function OwnSummary({ own }: { own: NonNullable<HomeSummary['own']> }) {
+  const groups = groupOwnStatuses(own)
   return (
-    <section aria-labelledby="home-indicators">
-      <h2 id="home-indicators" className="section-title">
+    <section className="home__section" aria-labelledby="home-summary">
+      <h2 id="home-summary" className="home__section-title">
         Resumen
       </h2>
-      <ul className="metric-grid home-metrics">
-        {summary.attention && (
-          <Indicator
-            value={summary.attention.assigned}
-            label="Atenciones asignadas"
-            hint="Por atender"
-            to={PATHS.attention}
-          />
-        )}
-        {summary.planning && (
-          <>
-            <Indicator
-              value={summary.planning.to_schedule}
-              label="Por programar"
-              hint="Registradas o reabiertas en tus áreas"
-              to={PATHS.planning}
-            />
-            <Indicator
-              value={summary.planning.follow_up}
-              label="Con atención pendiente"
-              hint="Última intervención En proceso o No solucionado"
-              to={`${PATHS.planning}?queue=pending`}
-            />
-          </>
-        )}
-        {summary.verification && (
-          <Indicator
-            value={summary.verification.pending}
-            label="Cierres por verificar"
-            hint="De otras personas, en tus áreas"
-            to={PATHS.verifications}
-          />
-        )}
-        {summary.surveys && summary.surveys.pending > 0 && (
-          <Indicator
-            value={summary.surveys.pending}
-            label="Encuestas pendientes"
-            hint="Evalúa la atención de tus incidencias cerradas"
-            to={PATHS.myIncidents}
-          />
-        )}
-        {own && (
-          <Indicator
-            value={ownOpen}
-            label="Mis incidencias abiertas"
-            hint={`${own.total} registradas en total`}
-            to={PATHS.myIncidents}
-          />
-        )}
+      <ul className="home-stats" aria-label="Mis incidencias por estado">
+        <Stat value={groups.pending} label="Pendientes" />
+        <Stat value={groups.inAttention} label="En atención" />
+        <Stat value={groups.closed} label="Cerradas" />
       </ul>
-      {own && own.total > 0 && (
-        <ul className="status-summary" aria-label="Mis incidencias por estado">
-          {own.by_status.map((row) => (
-            <li key={row.key}>
-              <StatusBadge status={row.key} label={row.label} />
-              <span className="status-summary__total">{row.total}</span>
-            </li>
-          ))}
-        </ul>
+    </section>
+  )
+}
+
+function Stat({ value, label }: { value: number; label: string }) {
+  return (
+    <li className="home-stat">
+      <span className="home-stat__value">{value}</span>
+      <span className="home-stat__label">{label}</span>
+    </li>
+  )
+}
+
+function SurveyCard({ pending, reminder }: { pending: number; reminder: SurveyReminder | null }) {
+  const latest = reminder?.items[0]
+  // Abre la encuesta existente del ticket más reciente; sin el ticket, va a Mis incidencias.
+  const target = latest ? evaluateSurveyPath(latest.code) : PATHS.myIncidents
+  return (
+    <section className="home-survey" aria-labelledby="home-survey">
+      <div>
+        <h2 id="home-survey" className="home-survey__title">
+          {pending === 1 ? 'Tienes 1 encuesta pendiente' : `Tienes ${pending} encuestas pendientes`}
+        </h2>
+        <p className="home-survey__text">
+          {pending === 1
+            ? 'Evalúa la atención de una incidencia cerrada.'
+            : 'Evalúa la atención de tus incidencias cerradas. Empezamos por la más reciente.'}
+        </p>
+      </div>
+      <Link to={target} className="btn btn--primary home-survey__action">
+        Evaluar atención
+      </Link>
+    </section>
+  )
+}
+
+function WorkSection({ summary }: { summary: HomeSummary }) {
+  const { todo } = summary
+  const counts = [
+    summary.attention && { label: 'Atenciones asignadas', value: summary.attention.assigned, to: PATHS.attention },
+    summary.planning && { label: 'Por programar', value: summary.planning.to_schedule, to: PATHS.planning },
+    summary.planning && {
+      label: 'Con atención pendiente',
+      value: summary.planning.follow_up,
+      to: `${PATHS.planning}?queue=pending`,
+    },
+    summary.verification && {
+      label: 'Cierres por verificar',
+      value: summary.verification.pending,
+      to: PATHS.verifications,
+    },
+  ].filter(Boolean) as { label: string; value: number; to: string }[]
+
+  return (
+    <section className="home__section" aria-labelledby="home-todo">
+      <h2 id="home-todo" className="home__section-title">
+        Requiere tu atención
+      </h2>
+      <ul className="home-chips" aria-label="Trabajo de tus áreas">
+        {counts.map((item) => (
+          <li key={item.label}>
+            <Link to={item.to} className="home-chip" aria-label={`${item.label}: ${item.value}`}>
+              <span className="home-chip__value">{item.value}</span> {item.label}
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {todo.total === 0 ? (
+        <p className="home-empty">No tienes actividades pendientes.</p>
+      ) : (
+        <>
+          <ul className="home-list" aria-label="Actividades que requieren tu atención">
+            {todo.items.map((item) => (
+              <li key={item.code}>
+                <Link
+                  to={todoPath(item)}
+                  className="home-item"
+                  aria-label={`${ACTIONS[item.action].verb} ${item.code}`}
+                >
+                  <span className="home-item__code">{item.code}</span>
+                  <span className="home-item__main">
+                    <span className="home-item__title">{ACTIONS[item.action].label}</span>
+                    <span className="home-item__meta">
+                      {item.care_unit} · {item.area_name}
+                    </span>
+                  </span>
+                  <span className="home-item__date">
+                    {item.date ? `${item.date_label}: ${formatRelativeDay(item.date)}` : '—'}
+                  </span>
+                  <span className="home-item__status">
+                    <StatusBadge status={item.status} label={item.status_label} />
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+          {todo.total > todo.items.length && (
+            <p className="home-empty" role="status">
+              Se muestran {todo.items.length} de {todo.total}. Consulta el resto en cada sección
+              del menú.
+            </p>
+          )}
+        </>
       )}
     </section>
   )
 }
 
-function Indicator({ value, label, hint, to }: { value: number; label: string; hint: string; to: string }) {
+function RecentIncidents({ incidents }: { incidents: IncidentSummary[] }) {
   return (
-    <li>
-      <Link to={to} className="metric metric--link" aria-label={`${label}: ${value}`}>
-        <span className="metric__value">{value}</span>
-        <span className="metric__label">{label}</span>
-        <span className="metric__hint">{hint}</span>
-      </Link>
-    </li>
-  )
-}
-
-function TodoList({ todo }: { todo: HomeSummary['todo'] }) {
-  return (
-    <section aria-labelledby="home-todo">
-      <h2 id="home-todo" className="section-title">
-        Requiere tu atención
-      </h2>
-      {todo.total === 0 ? (
-        <p className="muted">No tienes actividades pendientes.</p>
+    <section className="home__section" aria-labelledby="home-recent">
+      <div className="home__section-header">
+        <h2 id="home-recent" className="home__section-title">
+          Mis incidencias recientes
+        </h2>
+        {incidents.length > 0 && (
+          <Link to={PATHS.myIncidents} className="home__link">
+            Ver todas
+          </Link>
+        )}
+      </div>
+      {incidents.length === 0 ? (
+        <p className="home-empty">
+          Aún no has registrado incidencias. Cuando registres una, podrás seguir su estado aquí.
+        </p>
       ) : (
-        <>
-          {todo.total > todo.items.length && (
-            <p className="muted" role="status">
-              Se muestran {todo.items.length} de {todo.total}. Consulta el resto en cada sección
-              del menú.
-            </p>
-          )}
-          <table className="data-table planning-table">
-            <caption className="visually-hidden">Actividades que requieren tu atención</caption>
-            <thead>
-              <tr>
-                <th scope="col">Ticket</th>
-                <th scope="col">Pendiente</th>
-                <th scope="col">Estado</th>
-                <th scope="col">Fecha</th>
-                <th scope="col">
-                  <span className="visually-hidden">Acción</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {todo.items.map((item) => (
-                <tr key={item.code}>
-                  <th scope="row" data-label="Ticket">
-                    <span className="data-table__code">{item.code}</span>
-                    <span className="planning-table__meta">
-                      {item.care_unit} · {item.area_name}
-                    </span>
-                  </th>
-                  <td data-label="Pendiente">{ACTIONS[item.action].label}</td>
-                  <td data-label="Estado">
-                    <StatusBadge status={item.status} label={item.status_label} />
-                  </td>
-                  <td data-label="Fecha">
-                    {item.date ? `${item.date_label}: ${formatDateTime(item.date)}` : '—'}
-                  </td>
-                  <td data-label="Acción">
-                    <Link
-                      to={todoPath(item)}
-                      className="btn btn--secondary planning-table__action"
-                      aria-label={`${ACTIONS[item.action].verb} ${item.code}`}
-                    >
-                      {ACTIONS[item.action].verb}
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </>
+        <ul className="home-list" aria-label="Mis incidencias recientes">
+          {incidents.map((incident) => (
+            <li key={incident.code}>
+              <Link to={myIncidentPath(incident.code)} className="home-item">
+                <span className="home-item__code">{incident.code}</span>
+                <span className="home-item__main">
+                  <span className="home-item__title">
+                    {incident.description_preview || 'Sin descripción'}
+                  </span>
+                  <span className="home-item__meta">{incident.support_area.name}</span>
+                </span>
+                <span className="home-item__date">{formatRelativeDay(incident.created_at)}</span>
+                <span className="home-item__status">
+                  <StatusBadge status={incident.status} label={incident.status_label} />
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   )
