@@ -137,6 +137,9 @@ function summary(incident: IncidentDetail) {
     created_at: incident.created_at,
     has_attachments: incident.attachments.length > 0,
     survey_pending: Boolean((incident as { survey_pending?: boolean }).survey_pending),
+    // Como el backend: vista previa de la descripción, solo en Mis incidencias.
+    description_preview:
+      incident.description.length <= 100 ? incident.description : `${incident.description.slice(0, 99).trimEnd()}…`,
   }
 }
 

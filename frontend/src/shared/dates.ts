@@ -39,6 +39,25 @@ export function toLimaInputValue(value: string | Date): string {
   return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`
 }
 
+const timeFormat = new Intl.DateTimeFormat('es-PE', {
+  timeStyle: 'short',
+  timeZone: DISPLAY_TIME_ZONE,
+})
+
+/**
+ * Fecha breve para listas, en hora de Lima: «Hoy, 9:42 a. m.», «Ayer, 4:18 p. m.» o la
+ * fecha completa si es anterior.
+ */
+export function formatRelativeDay(value: string | Date, now: Date = new Date()): string {
+  const date = typeof value === 'string' ? new Date(value) : value
+  const day = toLimaInputValue(date).slice(0, 10)
+  const today = limaToday(now)
+  const yesterday = limaToday(new Date(now.getTime() - 24 * 60 * 60 * 1000))
+  if (day === today) return `Hoy, ${timeFormat.format(date)}`
+  if (day === yesterday) return `Ayer, ${timeFormat.format(date)}`
+  return formatDateTime(date)
+}
+
 /** Fecha de hoy en Lima: AAAA-MM-DD. */
 export function limaToday(now: Date = new Date()): string {
   return toLimaInputValue(now).slice(0, 10)

@@ -13,7 +13,8 @@
   --color-brand-on-guinda: #ffffff;
   --color-brand-on-guinda-muted: #f4dbe1; /* 6.5:1 sobre el guinda */
   --color-brand-logo-bg: #ffffff; /* fondo del logotipo JPG */
-  --color-focus-on-guinda: #ffd23f; /* foco visible sobre la barra guinda */
+  --color-brand-yellow: #ffd23f; /* amarillo institucional; guinda oscuro encima: 7.5:1 */
+  --color-focus-on-guinda: var(--color-brand-yellow); /* foco visible sobre la barra guinda */
 
   /* Medidas de los logotipos (se escalan con object-fit: contain) */
   --logo-login-width: clamp(9.5rem, 7rem + 10vw, 15rem);
@@ -42,6 +43,8 @@
   --color-success-soft: #e6f4ea;
   --color-info: #0b5c78;
   --color-info-soft: #e3f1f6;
+  --color-warm-soft: #fdf6ec; /* fondo neutro con acento cálido muy suave */
+  --color-warm-border: #f1e2cb;
 
   --radius: 10px;
   --radius-small: 6px;
@@ -525,15 +528,14 @@ a {
   color: var(--color-brand-on-guinda);
 }
 
+/* De borde a borde: el logotipo se alinea con el menú lateral y el avatar con el borde. */
 .topbar__inner {
-  max-width: var(--max-width);
   min-height: var(--topbar-min-height);
-  margin: 0 auto;
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-3) var(--space-5);
   display: grid;
-  /* Logotipo en el extremo izquierdo, identidad textual y botón del menú; a la derecha, la cuenta. */
-  grid-template-columns: auto auto auto 1fr;
-  grid-template-areas: 'logo identity toggle controls';
+  /* Logotipo en el extremo izquierdo, identidad textual y, a la derecha, el avatar. */
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'logo identity controls';
   align-items: center;
   gap: var(--space-3) var(--space-5);
 }
@@ -544,6 +546,8 @@ a {
 
 .topbar__identity {
   grid-area: identity;
+  justify-self: start; /* el enlace ocupa solo su contenido, no toda la columna */
+  min-width: 0;
   color: inherit;
   text-decoration: none;
   line-height: 1.25;
@@ -556,12 +560,15 @@ a {
   display: block;
   font-weight: 800;
   letter-spacing: 0.02em;
+  white-space: nowrap; /* «SGIM-CMCH» no se corta en el guion */
 }
 
+/* Subtítulo: blanco atenuado (6.4:1 sobre el guinda), con menos peso que el nombre. */
 .topbar__tagline {
   display: block;
   color: var(--color-brand-on-guinda-muted);
-  font-size: 0.85rem;
+  font-size: 0.8rem;
+  font-weight: 400;
 }
 
 .topbar__controls {
@@ -584,20 +591,19 @@ a {
   width: auto;
 }
 
-/* Botón del menú lateral (ocultar en escritorio; abrir el panel en móvil). */
+/* Control compacto del menú lateral: solo icono (nombre accesible en aria-label). */
 .menu-toggle {
   grid-area: toggle;
   display: inline-flex;
   align-items: center;
-  gap: var(--space-2);
-  min-height: 2.75rem;
-  padding: var(--space-2) var(--space-3);
-  border: 2px solid var(--color-brand-on-guinda);
+  justify-content: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 0;
   border-radius: var(--radius-small);
   background: transparent;
   color: var(--color-brand-on-guinda);
-  font: inherit;
-  font-weight: 600;
   cursor: pointer;
 }
 
@@ -609,7 +615,7 @@ a {
 .menu-toggle__icon::before,
 .menu-toggle__icon::after {
   display: block;
-  width: 1.1rem;
+  width: 1.25rem;
   height: 2px;
   background: currentColor;
   border-radius: 1px;
@@ -634,40 +640,115 @@ a {
   top: 6px;
 }
 
-.user-menu {
-  display: flex;
+/* --- Menú de perfil (avatar) ------------------------------------------- */
+
+.profile-menu {
+  position: relative;
+}
+
+.profile-menu__avatar {
+  display: inline-flex;
   align-items: center;
-  gap: var(--space-3);
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 0;
+  border-radius: 50%;
+  background: var(--color-brand-yellow);
+  color: var(--color-brand-guinda-dark);
+  font: inherit;
+  font-size: 1.1rem;
+  font-weight: 800;
+  cursor: pointer;
 }
 
-.user-menu__name {
-  color: inherit;
+.profile-menu__avatar:hover {
+  box-shadow: 0 0 0 3px var(--color-brand-on-guinda-muted);
+}
+
+.profile-menu__panel {
+  position: absolute;
+  top: calc(100% + var(--space-2));
+  right: 0;
+  z-index: 60;
+  width: max-content;
+  min-width: 13rem;
+  max-width: min(18rem, calc(100vw - 2rem));
+  padding: var(--space-2);
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgb(23 35 46 / 18%);
+  color: var(--color-text);
+}
+
+.profile-menu__panel[hidden] {
+  display: none;
+}
+
+.profile-menu__user {
+  margin: 0;
+  padding: var(--space-2) var(--space-3) var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.profile-menu__name {
+  display: block;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.profile-menu__username {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+
+.profile-menu__list {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+}
+
+.profile-menu__item {
+  display: block;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  border: 0;
+  border-radius: var(--radius-small);
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
   font-weight: 600;
-  max-width: 14rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
 }
 
-.topbar .btn--ghost {
-  color: var(--color-brand-on-guinda);
-  border-color: var(--color-brand-on-guinda);
+.profile-menu__item:hover {
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
 }
 
-.topbar .btn--ghost:hover:not(:disabled) {
-  background: var(--color-brand-guinda-dark);
+/* El foco del menú (fondo gris) usa el foco general, no el amarillo de la barra. */
+.topbar .profile-menu__panel :focus-visible {
+  outline-color: var(--color-focus);
 }
 
-/* Tabletas y móviles: logotipo, identidad y menú arriba; la cuenta abajo. */
+/* Tabletas y móviles: una sola fila; el subtítulo cede espacio. */
 @media (max-width: 56rem) {
   .topbar__inner {
-    grid-template-columns: auto 1fr auto;
-    grid-template-areas:
-      'logo identity toggle'
-      'controls controls controls';
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    grid-template-areas: 'logo identity toggle controls';
+    gap: var(--space-2) var(--space-3);
   }
-  .topbar__controls {
-    justify-content: space-between;
+}
+
+@media (max-width: 40rem) {
+  .topbar__tagline {
+    display: none;
   }
 }
 
@@ -676,27 +757,11 @@ a {
   :root {
     --logo-topbar-height: 2rem;
   }
-  .topbar__tagline {
-    display: none;
+  .topbar__inner {
+    padding-inline: var(--space-3);
   }
   .topbar__identity {
     padding-left: var(--space-3);
-  }
-  .topbar__controls,
-  .user-menu {
-    width: 100%;
-  }
-  .menu-toggle__label {
-    /* Solo el icono; el nombre accesible lo da el texto oculto visualmente. */
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
-  .user-menu {
-    justify-content: space-between;
   }
 }
 
@@ -706,10 +771,6 @@ a {
   display: grid;
   grid-template-columns: 16rem minmax(0, 1fr);
   align-items: start;
-}
-
-.shell--collapsed {
-  grid-template-columns: minmax(0, 1fr);
 }
 
 .sidebar {
@@ -1028,37 +1089,312 @@ a {
   font-size: 0.9rem;
 }
 
-/* --- Inicio: dashboard operativo (ADR 0010) ---------------------------- */
+/* --- Inicio de los trabajadores: mobile-first (ADR 0010) ----------------- */
 
-.metric--link {
-  height: 100%;
+.home {
+  display: grid;
+  gap: var(--space-5);
+  max-width: 60rem; /* en escritorio no se estira de más */
+}
+
+.home__header {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.home__title {
+  font-size: clamp(1.6rem, 1.3rem + 1.2vw, 2rem);
+  line-height: 1.15;
+}
+
+.home__lead {
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+}
+
+/* Acción principal: en móvil, guinda y de ancho completo. */
+.home__cta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  min-height: 3.25rem;
+  padding: var(--space-3) var(--space-5);
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-brand-on-guinda);
+  font-size: 1.1rem;
+}
+
+.home__cta:hover {
+  background: var(--color-primary-hover);
+  color: var(--color-brand-on-guinda);
+}
+
+.home__cta-chevron {
+  font-size: 1.6rem;
+  line-height: 1;
+}
+
+.home__section {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.home__section-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.home__section-title {
+  font-size: 1.15rem;
+}
+
+.home__link {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.home-empty {
+  color: var(--color-text-muted);
+}
+
+/* Resumen: tres tarjetas en una fila; en pantallas muy estrechas, más compactas. */
+.home-stats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.home-stat {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  text-align: center;
+  min-width: 0;
+}
+
+.home-stat__value {
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.home-stat__label {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
+
+/* Encuestas pendientes: tarjeta discreta, con acento cálido suave. */
+.home-survey {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-warm-soft);
+  border: 1px solid var(--color-warm-border);
+  border-radius: var(--radius);
+}
+
+.home-survey__title {
+  font-size: 1rem;
+}
+
+.home-survey__text {
+  margin-top: var(--space-1);
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.home-survey__action {
+  justify-self: start;
+}
+
+/* Trabajo de las áreas: conteos compactos que llevan a cada bandeja. */
+.home-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.home-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-1);
+  min-height: 2.75rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.home-chip:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.home-chip__value {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Listas del Inicio: tarjetas compactas en móvil, filas en escritorio. */
+.home-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.home-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'code status'
+    'main main'
+    'date date';
+  gap: var(--space-1) var(--space-3);
+  padding: var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
   color: var(--color-text);
   text-decoration: none;
 }
 
-.metric--link:hover {
-  background: var(--color-primary-soft);
+.home-item:hover {
+  border-color: var(--color-primary);
 }
 
-.status-summary {
-  list-style: none;
-  margin: var(--space-3) 0 0;
-  padding: 0;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2) var(--space-4);
+.home-item__code {
+  grid-area: code;
+  color: var(--color-primary);
+  font-weight: 800;
+  overflow-wrap: anywhere;
 }
 
-.status-summary li {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-2);
+.home-item__status {
+  grid-area: status;
+  justify-self: end;
 }
 
-.status-summary__total {
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
+.home-item__main {
+  grid-area: main;
+  display: grid;
+  gap: 2px;
+  min-width: 0;
 }
+
+.home-item__title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.home-item__meta,
+.home-item__date {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+}
+
+.home-item__date {
+  grid-area: date;
+}
+
+@media (max-width: 22rem) {
+  /* Pantallas muy estrechas (≈320 px): tarjetas del resumen más compactas. */
+  .home-stats {
+    gap: var(--space-1);
+  }
+  .home-stat {
+    padding: var(--space-3) var(--space-1);
+  }
+  .home-stat__value {
+    font-size: 1.5rem;
+  }
+  .home-stat__label {
+    font-size: 0.8rem;
+  }
+}
+
+@media (min-width: 48rem) {
+  .home__header {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: start;
+  }
+  /* En escritorio, la acción es discreta y va junto al saludo. */
+  .home__cta {
+    width: auto;
+    min-height: 2.75rem;
+    padding: var(--space-2) var(--space-5);
+    background: var(--color-surface);
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+    font-size: 1rem;
+  }
+  .home__cta:hover {
+    background: var(--color-primary-soft);
+    color: var(--color-primary);
+  }
+  .home__cta-chevron {
+    display: none;
+  }
+  .home-stats {
+    gap: var(--space-4);
+  }
+  .home-stat {
+    justify-items: start;
+    padding: var(--space-4) var(--space-5);
+    text-align: left;
+  }
+  .home-survey {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    padding: var(--space-4) var(--space-5);
+  }
+  .home-survey__action {
+    justify-self: end;
+  }
+  /* Filas: código | descripción y área | fecha | estado, dentro de una sola tarjeta. */
+  .home-list {
+    gap: 0;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .home-list > li + li {
+    border-top: 1px solid var(--color-border);
+  }
+  .home-item {
+    grid-template-columns: 9.5rem minmax(0, 1fr) 9rem auto;
+    grid-template-areas: 'code main date status';
+    align-items: center;
+    padding: var(--space-3) var(--space-5);
+    border: 0;
+    border-radius: 0;
+  }
+  .home-item:hover {
+    background: var(--color-surface-muted);
+  }
+}
+
 
 /* --- Panel de Administración (ADR 0011) -------------------------------- */
 

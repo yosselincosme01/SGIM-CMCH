@@ -35,6 +35,8 @@ export interface IncidentSummary {
   has_attachments: boolean
   /** Mis incidencias: cierre vigente pendiente de evaluar (ADR 0012). */
   survey_pending?: boolean
+  /** Mis incidencias: vista previa de la descripción (unos 100 caracteres). */
+  description_preview?: string
 }
 
 export interface IncidentAttachment {

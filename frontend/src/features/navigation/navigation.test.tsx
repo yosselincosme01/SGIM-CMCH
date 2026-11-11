@@ -2,12 +2,16 @@
  * Navegación unificada por capacidades (ADR 0009): menú, inicio, rutas protegidas,
  * accesibilidad y comportamiento responsive. Solo datos ficticios.
  */
-import { act, screen, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { backend, USERS } from '../../test/fakeBackend'
 import { defaultSummary, homeBackend } from '../../test/fakeHome'
+import { incidentsBackend } from '../../test/fakeIncidents'
+import { surveyBackend } from '../../test/fakeSurvey'
 import { fillLogin, renderApp } from '../../test/renderApp'
+import { formatRelativeDay } from '../../shared/dates'
+import { groupOwnStatuses } from '../workspace/ownStatusGroups'
 import { activeItemPath, buildMenu, canAccess, type Feature } from './access'
 
 type User = (typeof USERS)[keyof typeof USERS]
@@ -171,10 +175,11 @@ describe('layout unificado', () => {
     )
   })
 
-  it('muestra el nombre con acceso a Mi cuenta y las funciones por área, sin roles internos', async () => {
+  it('«Ver perfil» lleva a Mi cuenta con las funciones por área, sin roles internos', async () => {
     const { user } = await openApp(USERS.multirol)
 
-    await user.click(screen.getByRole('link', { name: 'Mi cuenta: Luis Prueba' }))
+    await user.click(screen.getByRole('button', { name: 'Menú de perfil de Luis Prueba' }))
+    await user.click(screen.getByRole('link', { name: 'Ver perfil' }))
 
     expect(await screen.findByRole('heading', { name: 'Mi cuenta', level: 1 })).toBeInTheDocument()
     const row = screen.getByRole('row', { name: /TI/ })
@@ -182,21 +187,13 @@ describe('layout unificado', () => {
     expect(screen.queryByText(/planificador|personal_atencion/)).not.toBeInTheDocument()
   })
 
-  it('en escritorio el menú se puede ocultar y mostrar con el teclado', async () => {
+  it('en escritorio el menú lateral está siempre visible y no hay botón para ocultarlo', async () => {
     const { user, nav } = await openApp(USERS.solicitante)
-    const toggle = screen.getByRole('button', { name: 'Ocultar menú' })
-    expect(toggle).toHaveAttribute('aria-expanded', 'true')
-    expect(toggle).toHaveAttribute('aria-controls', 'menu-principal')
 
-    toggle.focus()
-    await user.keyboard('{Enter}')
-
-    expect(nav).not.toBeVisible()
-    expect(screen.getByRole('button', { name: 'Mostrar menú' })).toHaveAttribute(
-      'aria-expanded',
-      'false',
-    )
-    await user.keyboard('{Enter}')
+    expect(nav).toBeVisible()
+    expect(screen.queryByRole('button', { name: /menú$/i })).not.toBeInTheDocument()
+    await user.click(within(nav).getByRole('link', { name: 'Mis incidencias' }))
+    await screen.findByRole('heading', { name: 'Mis incidencias', level: 1 })
     expect(nav).toBeVisible()
   })
 })
@@ -228,7 +225,7 @@ describe('menú en móviles', () => {
     const nav = document.getElementById('menu-principal') as HTMLElement
     expect(nav).toHaveAttribute('aria-label', 'Menú principal')
     expect(nav).not.toBeVisible()
-    const toggle = screen.getByRole('button', { name: 'Menú' })
+    const toggle = screen.getByRole('button', { name: 'Abrir menú' })
 
     await user.click(toggle)
 
@@ -245,7 +242,7 @@ describe('menú en móviles', () => {
     const { user } = renderApp('/')
     await screen.findByRole('heading', { name: 'Hola, Tomás' })
 
-    await user.click(screen.getByRole('button', { name: 'Menú' }))
+    await user.click(screen.getByRole('button', { name: 'Abrir menú' }))
     const nav = screen.getByRole('navigation', { name: 'Menú principal' })
     await act(async () => {
       await user.click(within(nav).getByRole('link', { name: 'Mis atenciones' }))
@@ -259,37 +256,86 @@ describe('menú en móviles', () => {
 // --- Inicio -----------------------------------------------------------------------------
 
 describe('inicio', () => {
-  /** Indicadores del Inicio: nombre accesible "Etiqueta: valor". */
-  async function indicators() {
-    const region = await screen.findByRole('region', { name: 'Resumen' })
-    return within(region)
-      .getAllByRole('link')
-      .map((link) => link.getAttribute('aria-label'))
+  /** Tarjetas del resumen: «valor etiqueta». */
+  async function summaryCards() {
+    const list = await screen.findByRole('list', { name: 'Mis incidencias por estado' })
+    return within(list)
+      .getAllByRole('listitem')
+      .map((item) => item.textContent)
+  }
+
+  /** Conteos del trabajo de las áreas: nombre accesible «Etiqueta: valor». */
+  function workChips() {
+    const list = screen.queryByRole('list', { name: 'Trabajo de tus áreas' })
+    return list
+      ? within(list)
+          .getAllByRole('link')
+          .map((link) => link.getAttribute('aria-label'))
+      : []
+  }
+
+  function signInWithReminderShown(user: User) {
+    backend.signIn(user)
+    surveyBackend.reminderShownIn.push(backend.sessionId) // el recordatorio ya se vio
   }
 
   it('no repite el menú con tarjetas de acceso', async () => {
     await openApp(USERS.multirol)
 
-    await screen.findByRole('region', { name: 'Resumen' })
+    await summaryCards()
     expect(screen.queryByRole('list', { name: 'Accesos directos' })).not.toBeInTheDocument()
     expect(screen.queryByText('Entrar →')).not.toBeInTheDocument()
   })
 
-  it('trabajador con funciones básicas: solo sus incidencias, sin pendientes operativos', async () => {
+  it('resumen de mis incidencias en tres grupos sin duplicados', async () => {
+    homeBackend.override = {
+      ...defaultSummaryFor(USERS.solicitante),
+      own: {
+        total: 6,
+        by_status: [
+          { key: 'registrada', label: 'Registrada', total: 1 },
+          { key: 'asignada', label: 'Asignada', total: 2 },
+          { key: 'cerrada', label: 'Cerrada', total: 1 },
+          { key: 'reabierta', label: 'Reabierta', total: 2 },
+        ],
+      },
+    }
     await openApp(USERS.solicitante)
 
-    expect(await indicators()).toEqual(['Mis incidencias abiertas: 2'])
-    const byStatus = screen.getByRole('list', { name: 'Mis incidencias por estado' })
-    expect(byStatus).toHaveTextContent('Registrada1')
+    // Pendientes = registradas + reabiertas; En atención = asignadas; Cerradas = cerradas.
+    expect(await summaryCards()).toEqual(['3Pendientes', '2En atención', '1Cerradas'])
+  })
+
+  it('agrupa los estados reales sin contar dos veces', () => {
+    const own = {
+      total: 4,
+      by_status: [
+        { key: 'registrada', label: 'Registrada', total: 1 },
+        { key: 'asignada', label: 'Asignada', total: 1 },
+        { key: 'cerrada', label: 'Cerrada', total: 1 },
+        { key: 'reabierta', label: 'Reabierta', total: 1 },
+      ],
+    }
+    const groups = groupOwnStatuses(own)
+    expect(groups).toEqual({ pending: 2, inAttention: 1, closed: 1 })
+    expect(groups.pending + groups.inAttention + groups.closed).toBe(own.total)
+  })
+
+  it('trabajador con funciones básicas: su resumen, sin pendientes operativos', async () => {
+    await openApp(USERS.solicitante)
+
+    expect(await summaryCards()).toEqual(['1Pendientes', '1En atención', '1Cerradas'])
     expect(screen.queryByRole('heading', { name: 'Requiere tu atención' })).not.toBeInTheDocument()
+    expect(workChips()).toEqual([])
   })
 
   it('solo verifica: cierres por verificar con enlace a Verificaciones, sin planificación', async () => {
     await openApp(USERS.verificador)
 
-    expect(await indicators()).toEqual(['Cierres por verificar: 1', 'Mis incidencias abiertas: 2'])
-    const table = screen.getByRole('table', { name: 'Actividades que requieren tu atención' })
-    expect(within(table).getByRole('link', { name: 'Verificar INC-2026-0202' })).toHaveAttribute(
+    await summaryCards()
+    expect(workChips()).toEqual(['Cierres por verificar: 1'])
+    const list = screen.getByRole('list', { name: 'Actividades que requieren tu atención' })
+    expect(within(list).getByRole('link', { name: 'Verificar INC-2026-0202' })).toHaveAttribute(
       'href',
       '/verificaciones/incidencias/INC-2026-0202',
     )
@@ -299,13 +345,10 @@ describe('inicio', () => {
   it('solo planifica: pendientes de planificación, sin verificaciones', async () => {
     await openApp(USERS.planificador)
 
-    expect(await indicators()).toEqual([
-      'Por programar: 1',
-      'Con atención pendiente: 1',
-      'Mis incidencias abiertas: 2',
-    ])
-    const table = screen.getByRole('table', { name: 'Actividades que requieren tu atención' })
-    expect(within(table).getByRole('link', { name: 'Planificar INC-2026-0203' })).toHaveAttribute(
+    await summaryCards()
+    expect(workChips()).toEqual(['Por programar: 1', 'Con atención pendiente: 1'])
+    const list = screen.getByRole('list', { name: 'Actividades que requieren tu atención' })
+    expect(within(list).getByRole('link', { name: 'Planificar INC-2026-0203' })).toHaveAttribute(
       'href',
       '/planificacion/incidencias/INC-2026-0203',
     )
@@ -315,30 +358,26 @@ describe('inicio', () => {
   it('técnico: atenciones asignadas con su fecha programada', async () => {
     await openApp(USERS.tecnico)
 
-    expect(await indicators()).toEqual(['Atenciones asignadas: 1', 'Mis incidencias abiertas: 2'])
-    const row = screen.getByRole('row', { name: /INC-2026-0201/ })
-    expect(row).toHaveTextContent('Atención asignada')
-    expect(row).toHaveTextContent(/Programada: 8 nov/)
-    expect(within(row).getByRole('link', { name: 'Atender INC-2026-0201' })).toHaveAttribute(
-      'href',
-      '/atenciones/incidencias/INC-2026-0201',
-    )
+    await summaryCards()
+    expect(workChips()).toEqual(['Atenciones asignadas: 1'])
+    const item = screen.getByRole('link', { name: 'Atender INC-2026-0201' })
+    expect(item).toHaveTextContent('Atención asignada')
+    expect(item).toHaveTextContent(/Programada: (Hoy|Ayer|.*nov)/)
+    expect(item).toHaveAttribute('href', '/atenciones/incidencias/INC-2026-0201')
   })
 
-  it('varias capacidades: todos sus indicadores y cada ticket una sola vez', async () => {
+  it('varias capacidades: todos sus conteos y cada ticket una sola vez', async () => {
     await openApp(USERS.multirol)
 
-    expect(await indicators()).toEqual([
+    await summaryCards()
+    expect(workChips()).toEqual([
       'Atenciones asignadas: 1',
       'Por programar: 1',
       'Con atención pendiente: 1',
       'Cierres por verificar: 1',
-      'Mis incidencias abiertas: 2',
     ])
-    const table = screen.getByRole('table', { name: 'Actividades que requieren tu atención' })
-    const tickets = within(table)
-      .getAllByRole('rowheader')
-      .map((cell) => cell.querySelector('.data-table__code')?.textContent)
+    const list = screen.getByRole('list', { name: 'Actividades que requieren tu atención' })
+    const tickets = [...list.querySelectorAll('.home-item__code')].map((node) => node.textContent)
     expect(new Set(tickets).size).toBe(tickets.length)
   })
 
@@ -350,7 +389,7 @@ describe('inicio', () => {
     expect(await screen.findByText(/Se muestran 2 de 14/)).toBeInTheDocument()
   })
 
-  it('sin pendientes lo dice, sin inventar datos', async () => {
+  it('sin pendientes operativos lo dice, sin inventar datos', async () => {
     homeBackend.override = {
       ...defaultSummaryFor(USERS.tecnico),
       attention: { assigned: 0 },
@@ -359,28 +398,30 @@ describe('inicio', () => {
     await openApp(USERS.tecnico)
 
     expect(await screen.findByText('No tienes actividades pendientes.')).toBeInTheDocument()
-    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Actividades que requieren tu atención' })).not.toBeInTheDocument()
   })
 
-  it('solo muestra indicadores y pendientes: sin actividad reciente ni próximas atenciones', async () => {
+  it('ordena las secciones: resumen, trabajo y mis incidencias recientes', async () => {
     await openApp(USERS.multirol)
 
-    await screen.findByRole('region', { name: 'Resumen' })
+    await summaryCards()
     const main = screen.getByRole('main')
     expect(within(main).getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
       'Resumen',
       'Requiere tu atención',
+      'Mis incidencias recientes',
     ])
     expect(screen.queryByText(/Actividad reciente|Próximas atenciones/)).not.toBeInTheDocument()
   })
 
-  it('ofrece un botón discreto para registrar una incidencia junto al encabezado', async () => {
+  it('la acción principal «Registrar incidencia» está junto al saludo y lleva al formulario', async () => {
     await openApp(USERS.tecnico)
 
     const header = (await screen.findByRole('heading', { name: 'Hola, Tomás', level: 1 })).closest('header')
     const button = within(header as HTMLElement).getByRole('link', { name: 'Registrar incidencia' })
     expect(button).toHaveAttribute('href', '/incidencias/nueva')
-    expect(button).toHaveClass('btn--secondary')
+    expect(button).toHaveClass('home__cta')
+    expect(screen.getByText('¿En qué podemos ayudarte hoy?')).toBeInTheDocument()
   })
 
   it('sin autorización para registrar no se ofrece el botón', async () => {
@@ -390,19 +431,85 @@ describe('inicio', () => {
     expect(screen.queryByRole('link', { name: 'Registrar incidencia' })).not.toBeInTheDocument()
   })
 
-  it('encuestas pendientes: indicador que lleva a Mis incidencias', async () => {
-    homeBackend.override = { ...defaultSummaryFor(USERS.solicitante), surveys: { pending: 2 } }
-    await openApp(USERS.solicitante)
+  it('encuesta pendiente: tarjeta con «Evaluar atención» hacia la encuesta existente', async () => {
+    const incident = incidentsBackend.seed(USERS.solicitante.username, {
+      status: 'cerrada',
+      status_label: 'Cerrada',
+    })
+    surveyBackend.pending(incident.code)
+    homeBackend.override = { ...defaultSummaryFor(USERS.solicitante), surveys: { pending: 1 } }
+    signInWithReminderShown(USERS.solicitante)
+    renderApp('/')
 
-    expect(await indicators()).toEqual(['Encuestas pendientes: 2', 'Mis incidencias abiertas: 2'])
-    expect(screen.getByRole('link', { name: 'Encuestas pendientes: 2' })).toHaveAttribute('href', '/incidencias')
+    const card = await screen.findByRole('region', { name: 'Tienes 1 encuesta pendiente' })
+    expect(card).toHaveTextContent('Evalúa la atención de una incidencia cerrada.')
+    await waitFor(() =>
+      expect(within(card).getByRole('link', { name: 'Evaluar atención' })).toHaveAttribute(
+        'href',
+        `/incidencias/${incident.code}?evaluar=1`,
+      ),
+    )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument() // el recordatorio no se duplica
   })
 
-  it('sin encuestas pendientes no muestra el indicador', async () => {
+  it('varias encuestas pendientes: un solo aviso, empezando por la más reciente', async () => {
+    homeBackend.override = { ...defaultSummaryFor(USERS.solicitante), surveys: { pending: 3 } }
+    signInWithReminderShown(USERS.solicitante)
+    renderApp('/')
+
+    const card = await screen.findByRole('region', { name: 'Tienes 3 encuestas pendientes' })
+    expect(within(card).getAllByRole('link')).toHaveLength(1)
+  })
+
+  it('sin encuestas pendientes no muestra la tarjeta', async () => {
     homeBackend.override = { ...defaultSummaryFor(USERS.solicitante), surveys: { pending: 0 } }
     await openApp(USERS.solicitante)
 
-    expect(await indicators()).toEqual(['Mis incidencias abiertas: 2'])
+    await summaryCards()
+    expect(screen.queryByRole('region', { name: /encuesta/i })).not.toBeInTheDocument()
+  })
+
+  it('sin incidencias propias: estado vacío claro y sin «Ver todas»', async () => {
+    await openApp(USERS.solicitante)
+
+    const section = await screen.findByRole('region', { name: 'Mis incidencias recientes' })
+    expect(section).toHaveTextContent('Aún no has registrado incidencias.')
+    expect(within(section).queryByRole('link', { name: 'Ver todas' })).not.toBeInTheDocument()
+  })
+
+  it('una incidencia reciente: código, descripción, área, fecha y estado, con acceso al detalle', async () => {
+    const incident = incidentsBackend.seed(USERS.solicitante.username, {
+      description: 'Monitor de signos vitales no enciende (ficticio).',
+      status: 'asignada',
+      status_label: 'Asignada',
+    })
+    await openApp(USERS.solicitante)
+
+    const section = await screen.findByRole('region', { name: 'Mis incidencias recientes' })
+    const item = await within(section).findByRole('link', { name: new RegExp(incident.code) })
+    expect(item).toHaveAttribute('href', `/incidencias/${incident.code}`)
+    expect(item).toHaveTextContent('Monitor de signos vitales no enciende (ficticio).')
+    expect(item).toHaveTextContent(incident.support_area.name)
+    expect(item).toHaveTextContent('Asignada')
+    expect(within(section).getByRole('link', { name: 'Ver todas' })).toHaveAttribute('href', '/incidencias')
+  })
+
+  it('varias incidencias: muestra como máximo cinco, las más recientes', async () => {
+    const seeded = Array.from({ length: 7 }, (_, index) =>
+      incidentsBackend.seed(USERS.solicitante.username, { description: `Incidencia ficticia ${index}.` }),
+    )
+    await openApp(USERS.solicitante)
+
+    const list = await screen.findByRole('list', { name: 'Mis incidencias recientes' })
+    const codes = [...list.querySelectorAll('.home-item__code')].map((node) => node.textContent)
+    expect(codes).toEqual(seeded.slice(2).reverse().map((incident) => incident.code))
+  })
+
+  it('fechas breves en hora de Lima: hoy, ayer o la fecha completa', () => {
+    const now = new Date('2026-11-10T20:00:00Z') // 15:00 en Lima
+    expect(formatRelativeDay('2026-11-10T14:42:00Z', now)).toMatch(/^Hoy, 9:42\sa/)
+    expect(formatRelativeDay('2026-11-09T21:18:00Z', now)).toMatch(/^Ayer, 4:18\sp/)
+    expect(formatRelativeDay('2026-11-05T15:00:00Z', now)).toMatch(/nov/)
   })
 
   it('cuenta exclusivamente administrativa: al iniciar sesión entra al Dashboard general', async () => {
