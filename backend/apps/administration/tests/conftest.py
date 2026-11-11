@@ -123,6 +123,19 @@ class Builder:
         incident.refresh_from_db()
         return incident
 
+    def assigned_again(self, incident):
+        """Vuelve a programar una incidencia reabierta (nuevo ciclo de atención)."""
+        area = incident.support_area.code
+        planning_services.schedule_attention(
+            incident=incident,
+            actor=self.planners[area],
+            priority=PriorityLevel.objects.get(code="alta"),
+            technician=self.techs[area],
+            scheduled_at=timezone.now() + timedelta(days=1),
+        )
+        incident.refresh_from_db()
+        return incident
+
     def intervene(self, incident, result="solved", **fields):
         area = incident.support_area.code
         data = {

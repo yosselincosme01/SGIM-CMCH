@@ -26,6 +26,7 @@ from apps.incidents.models import (
     IncidentEvent,
     IncidentIntervention,
     IncidentVerification,
+    SatisfactionSurvey,
 )
 
 from .metrics import Filters, lima
@@ -244,12 +245,62 @@ def _verifications_rows(incidents):
         ]
 
 
+def _satisfaction_rows(incidents):
+    """
+    Una fila por cierre técnico (ADR 0012): la evaluación del solicitante o su estado.
+    "Pendiente" es un cierre vigente aún evaluable; "No evaluada (reabierta)", un cierre
+    que dejó de ser evaluable al reabrirse el ticket sin respuesta.
+    """
+    yield [
+        "Código",
+        "Área de soporte",
+        "UPS / servicio",
+        "Cierre técnico",
+        "Cerrada por",
+        "Encuesta",
+        "Calificación (1-5)",
+        "Comentario",
+        "Fecha de respuesta",
+    ]
+    surveys = {
+        survey.closing_intervention_id: survey
+        for survey in SatisfactionSurvey.objects.filter(incident__in=incidents)
+    }
+    closures = (
+        IncidentIntervention.objects.filter(
+            incident__in=incidents, result=IncidentIntervention.Result.SOLVED
+        )
+        .select_related("incident__support_area", "incident__care_unit", "technician")
+        .order_by("incident__code", "created_at", "id")
+    )
+    for closure in closures:
+        survey = surveys.get(closure.pk)
+        if survey:
+            state = "Respondida"
+        elif closure.incident.closing_intervention_id == closure.pk:
+            state = "Pendiente"
+        else:
+            state = "No evaluada (reabierta)"
+        yield [
+            closure.incident.code,
+            closure.incident.support_area.name,
+            closure.incident.care_unit.name,
+            closure.created_at,
+            _name(closure.technician),
+            state,
+            survey.rating if survey else "",
+            survey.comment if survey else "",
+            survey.created_at if survey else None,
+        ]
+
+
 REPORTS: dict[str, tuple[str, Callable[[object], Iterable[list]]]] = {
     "incidents": ("Incidencias generales", _incidents_rows),
     "times": ("Tiempos de atención y cierre", _times_rows),
     "interventions": ("Intervenciones", _interventions_rows),
     "pending": ("Pendientes", _pending_rows),
     "verifications": ("Verificaciones y reaperturas", _verifications_rows),
+    "satisfaction": ("Satisfacción del solicitante", _satisfaction_rows),
 }
 
 

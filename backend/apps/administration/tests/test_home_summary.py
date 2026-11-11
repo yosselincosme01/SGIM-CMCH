@@ -45,7 +45,7 @@ def test_requester_sees_own_incidents_by_status_only(client_for, builder):
     assert body["planning"] is None
     assert body["attention"] is None
     assert body["verification"] is None
-    assert body["surveys"] is None  # Etapa 3
+    assert body["surveys"] == {"pending": 1}  # la cerrada aún no se evaluó (ADR 0012)
     assert body["todo"] == {"total": 0, "items": []}
 
 
@@ -171,6 +171,7 @@ def test_non_operational_accounts_get_an_empty_summary(client_for, make_user, bu
     body = summary(client_for, user)
 
     assert body["own"] is None
+    assert body["surveys"] is None
     assert body["planning"] is None and body["attention"] is None
     assert body["verification"] is None
     assert body["todo"] == {"total": 0, "items": []}
