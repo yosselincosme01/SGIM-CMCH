@@ -5,6 +5,7 @@ Atención, cierre técnico, verificación y reapertura (ADR 0006): permisos por 
 
 import threading
 from datetime import timedelta
+from zoneinfo import ZoneInfo
 
 import pytest
 from django.core.exceptions import PermissionDenied
@@ -162,7 +163,9 @@ def test_inbox_requires_attention_role(client_for, solicitante, planner, who):
 def test_inbox_filters_by_status_and_date(client_for, tech, assigned):
     client = client_for(tech)
     assert client.get(f"{ATTENTION_LIST}?status=cerrada").json()["count"] == 0
-    day = future().date().isoformat()
+    # El filtro usa el día de Lima: se calcula igual para no fallar entre las 19:00 y la
+    # medianoche de Lima, cuando en UTC ya es el día siguiente.
+    day = timezone.localtime(future(), ZoneInfo("America/Lima")).date().isoformat()
     assert client.get(f"{ATTENTION_LIST}?scheduled_on={day}").json()["count"] == 1
     assert client.get(f"{ATTENTION_LIST}?status=registrada").status_code == 400
 
