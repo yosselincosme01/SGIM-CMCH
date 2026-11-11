@@ -46,10 +46,14 @@ class SupportAreaMembership(models.Model):
     Integrante de un área de soporte y su función **en esa área**.
 
     El rol global no basta: para planificar se requiere el rol ``planificador`` y
-    ``can_plan``; para recibir asignaciones, el rol ``personal_atencion`` y
-    ``can_be_assigned``. Ambas funciones son restrictivas por defecto y se habilitan
-    de forma explícita desde el admin. Una persona puede planificar en un área y ser
-    técnico en otra.
+    ``can_plan``; para recibir asignaciones y registrar atenciones, el rol
+    ``personal_atencion`` y ``can_be_assigned``; para verificar la conformidad de los
+    cierres técnicos, ``can_verify`` en una cuenta operativa, sin exigir el rol
+    ``planificador`` ni ``can_plan`` (ADR 0008).
+
+    Las tres funciones son **independientes** y restrictivas por defecto: planificar no
+    implica verificar, ni al revés. Una persona puede planificar en un área, verificar
+    en otra y ser técnico en una tercera.
     """
 
     area = models.ForeignKey(SupportArea, on_delete=models.CASCADE, related_name="memberships")
@@ -65,6 +69,14 @@ class SupportAreaMembership(models.Model):
         "puede recibir asignaciones",
         default=False,
         help_text="Requiere además el rol Personal de atención.",
+    )
+    can_verify = models.BooleanField(
+        "puede verificar conformidad",
+        default=False,
+        help_text=(
+            "Requiere una cuenta operativa activa, no el rol Planificador. Es independiente "
+            "de «puede planificar». Nadie verifica un cierre de una intervención que ejecutó."
+        ),
     )
     created_at = models.DateTimeField(auto_now_add=True)
 

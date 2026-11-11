@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router'
 
 import { isApiError } from '../../shared/api/errors'
 import { useDocumentTitle } from '../../shared/hooks/useDocumentTitle'
+import { PATHS } from '../../shared/paths'
 import { Alert } from '../../shared/ui/Alert'
 import { LoadingState } from '../../shared/ui/LoadingState'
 import { fetchIncident, type IncidentDetail } from './api'
@@ -17,7 +18,7 @@ type LoadState =
   | { status: 'error'; message: string }
   | { status: 'ready'; incident: IncidentDetail }
 
-/** Detalle de una incidencia propia (vista Solicitante). */
+/** Detalle de una incidencia propia (Mis incidencias). */
 export function IncidentDetailPage() {
   const { code = '' } = useParams()
   const [state, setState] = useState<LoadState>({ status: 'loading' })
@@ -55,7 +56,7 @@ export function IncidentDetailPage() {
             : state.message}
         </Alert>
         <p>
-          <Link to="/solicitante/incidencias" className="btn btn--secondary">
+          <Link to={PATHS.myIncidents} className="btn btn--secondary">
             Volver a mis incidencias
           </Link>
         </p>
@@ -107,7 +108,7 @@ export function IncidentDetailPage() {
       <IncidentHistory events={incident.events} />
 
       <p>
-        <Link to="/solicitante/incidencias" className="btn btn--secondary">
+        <Link to={PATHS.myIncidents} className="btn btn--secondary">
           Volver a mis incidencias
         </Link>
       </p>

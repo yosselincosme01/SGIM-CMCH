@@ -179,8 +179,20 @@ def test_me_returns_user_and_roles(api_client, urls, make_user):
 
     assert response.status_code == status.HTTP_200_OK
     body = response.json()
-    assert set(body) == {"id", "username", "first_name", "last_name", "full_name", "email", "roles"}
+    assert set(body) == {
+        "id",
+        "username",
+        "first_name",
+        "last_name",
+        "full_name",
+        "email",
+        "roles",
+        "capabilities",
+        "area_functions",
+    }
     assert body["roles"] == ["personal_atencion", "planificador"]
+    # Roles sin funciones por área: ninguna capacidad efectiva (ADR 0008).
+    assert body["capabilities"] == {"can_plan": False, "can_attend": False, "can_verify": False}
 
 
 @pytest.mark.django_db

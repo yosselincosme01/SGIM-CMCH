@@ -1,6 +1,7 @@
 # ADR 0006: Atención, cierre técnico, verificación y reapertura
 
 - **Estado:** propuesto. Implementado en `feature/incident-attention-workflow`.
+- **Actualizado por:** [ADR 0008](0008-funciones-independientes-por-area.md). Verificar conformidad es una función propia (`can_verify`), separada de planificar y sin exigir el rol Planificador, y toda cuenta operativa registra incidencias.
 - **Fecha:** 2026-11-07
 - **Relacionado:** [ADR 0004](0004-planificacion.md) (planificación y permisos por área),
   [ADR 0005](0005-identificacion-qr.md) (evidencia fotográfica)

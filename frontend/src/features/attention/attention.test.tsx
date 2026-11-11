@@ -83,7 +83,7 @@ function seedClosed(permissions: Partial<IncidentDetail['permissions']> = {}) {
 
 async function openAttention(code: string) {
   signIn(USERS.tecnico)
-  const utils = renderApp(`/personal-atencion/incidencias/${code}`)
+  const utils = renderApp(`/atenciones/incidencias/${code}`)
   await screen.findByRole('heading', { name: code, level: 1 })
   return utils
 }
@@ -113,18 +113,19 @@ const photo = () => new File([new Uint8Array(1024)], 'evidencia.jpg', { type: 'i
 
 // --- Bandeja ---------------------------------------------------------------------
 
-describe('bandeja del Personal de Atención', () => {
+describe('Mis atenciones', () => {
   it('se accede desde el inicio y lista las incidencias asignadas', async () => {
     seedAssigned()
     signIn(USERS.tecnico)
     const { user } = renderApp('/')
 
-    await user.click(await screen.findByRole('link', { name: /Personal de Atención/ }))
+    const nav = await screen.findByRole('navigation', { name: 'Menú principal' })
+    await user.click(within(nav).getByRole('link', { name: 'Mis atenciones' }))
 
     const table = await screen.findByRole('table')
     expect(within(table).getByRole('link', { name: /Atender INC-/ })).toHaveAttribute(
       'href',
-      expect.stringMatching(/^\/personal-atencion\/incidencias\/INC-/),
+      expect.stringMatching(/^\/atenciones\/incidencias\/INC-/),
     )
     expect(attentionBackend.requests.at(-1)?.path).toContain('status=asignada')
   })
@@ -132,7 +133,7 @@ describe('bandeja del Personal de Atención', () => {
   it('filtra por estado', async () => {
     seedAssigned()
     signIn(USERS.tecnico)
-    const { user } = renderApp('/personal-atencion')
+    const { user } = renderApp('/atenciones')
     await screen.findByRole('table')
 
     await user.selectOptions(screen.getByLabelText('Estado'), 'cerrada')
@@ -141,9 +142,9 @@ describe('bandeja del Personal de Atención', () => {
     expect(attentionBackend.requests.at(-1)?.path).toContain('status=cerrada')
   })
 
-  it('sin el rol no se muestra la vista', async () => {
+  it('sin la función de atención no se muestra la vista', async () => {
     signIn(USERS.solicitante)
-    renderApp('/personal-atencion')
+    renderApp('/atenciones')
 
     expect(await screen.findByRole('heading', { name: 'No tienes acceso a esta vista' })).toBeInTheDocument()
   })
@@ -250,12 +251,12 @@ describe('registro de intervención', () => {
 
 async function openPlanner(code: string) {
   signIn(USERS.multirol)
-  const utils = renderApp(`/planificador/incidencias/${code}`)
+  const utils = renderApp(`/planificacion/incidencias/${code}`)
   await screen.findByRole('heading', { name: 'Cierre técnico' })
   return utils
 }
 
-describe('verificación y reapertura del Planificador', () => {
+describe('verificación y reapertura', () => {
   it('registra la verificación Conforme', async () => {
     const incident = seedClosed()
     const { user } = await openPlanner(incident.code)
@@ -296,15 +297,66 @@ describe('verificación y reapertura del Planificador', () => {
     expect(reopenRequest?.body).toEqual({ reason: 'El usuario reporta la misma falla.' })
   })
 
-  it('la bandeja ofrece las colas de pendientes y por verificar', async () => {
-    seedClosed()
+  it('no ofrece verificar a quien realizó la atención de cierre (ADR 0008)', async () => {
+    const incident = seedClosed({ can_verify: false, verification_blocked: 'own_intervention' })
+    await openPlanner(incident.code)
+
+    expect(screen.queryByRole('button', { name: 'Registrar verificación' })).not.toBeInTheDocument()
+    expect(screen.getByText(/porque realizaste la atención/)).toBeInTheDocument()
+  })
+
+  it('sin la autorización de verificar no muestra el formulario', async () => {
+    const incident = seedClosed({ can_verify: false })
+    await openPlanner(incident.code)
+
+    expect(screen.queryByRole('button', { name: 'Registrar verificación' })).not.toBeInTheDocument()
+    expect(screen.getByText(/«Verificar conformidad» en el área/)).toBeInTheDocument()
+  })
+
+  it('verifica desde Verificaciones una cuenta que solo tiene la función de verificar', async () => {
+    const incident = seedClosed()
+    signIn(USERS.verificador) // rol Solicitante + can_verify en el área
+    const { user } = renderApp(`/verificaciones/incidencias/${incident.code}`)
+    await screen.findByRole('heading', { name: 'Cierre técnico' })
+
+    expect(screen.queryByRole('heading', { name: 'Programar atención' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('radio', { name: 'Conforme' }))
+    await user.click(screen.getByRole('button', { name: 'Registrar verificación' }))
+
+    await waitFor(() =>
+      expect(screen.queryByRole('button', { name: 'Registrar verificación' })).not.toBeInTheDocument(),
+    )
+    const [request] = attentionBackend.requests.filter((r) => r.path.endsWith('/verification/'))
+    expect(request.body).toEqual({ result: 'conforming' })
+  })
+
+  it('Planificación ofrece los pendientes; los cierres por verificar están en Verificaciones', async () => {
+    const incident = seedClosed()
     signIn(USERS.multirol)
-    const { user } = renderApp('/planificador')
+    const first = renderApp('/planificacion')
 
-    await user.click(await screen.findByRole('button', { name: /Cerradas por verificar/ }))
+    expect(await screen.findByRole('button', { name: /Pendientes de atención/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /por verificar/ })).not.toBeInTheDocument()
+    first.unmount()
 
-    expect(screen.getByRole('button', { name: /Cerradas por verificar/ })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: /Pendientes de atención/ })).toBeInTheDocument()
+    signIn(USERS.multirol)
+    renderApp('/verificaciones')
+    const table = await screen.findByRole('table')
+    expect(within(table).getByRole('link', { name: `Verificar ${incident.code}` })).toHaveAttribute(
+      'href',
+      `/verificaciones/incidencias/${incident.code}`,
+    )
+  })
+
+  it('en Verificaciones el detalle no ofrece planificar', async () => {
+    const incident = seedClosed()
+    signIn(USERS.multirol)
+    renderApp(`/verificaciones/incidencias/${incident.code}`)
+
+    expect(await screen.findByRole('heading', { name: 'Cierre técnico' })).toBeInTheDocument()
+    const breadcrumb = screen.getByRole('navigation', { name: 'Ruta de navegación' })
+    expect(within(breadcrumb).getByRole('link', { name: 'Verificaciones' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /Programar atención/ })).not.toBeInTheDocument()
   })
 })
 
@@ -318,7 +370,7 @@ describe('vista del solicitante tras el cierre', () => {
       closed_at: '2026-11-05T15:00:00-05:00',
     })
     signIn(USERS.solicitante)
-    renderApp('/solicitante/incidencias/INC-2026-000001')
+    renderApp('/incidencias/INC-2026-000001')
 
     expect(await screen.findByRole('heading', { name: 'Atención finalizada' })).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Intervenciones técnicas' })).not.toBeInTheDocument()

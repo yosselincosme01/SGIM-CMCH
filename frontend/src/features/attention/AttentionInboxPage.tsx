@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router'
 import { isApiError } from '../../shared/api/errors'
 import { formatDateTime } from '../../shared/dates'
 import { useDocumentTitle } from '../../shared/hooks/useDocumentTitle'
+import { attentionIncidentPath } from '../../shared/paths'
 import { Alert } from '../../shared/ui/Alert'
 import { Button } from '../../shared/ui/Button'
 import { LoadingState } from '../../shared/ui/LoadingState'
@@ -13,7 +14,6 @@ import type { PlanningItem } from '../planning/api'
 import { PriorityBadge } from '../planning/PlanningParts'
 import { fetchAttentionInbox } from './api'
 
-export const ATTENTION_PATH = '/personal-atencion'
 
 const STATUS_OPTIONS = [
   { value: 'asignada', label: 'Asignadas a mí' },
@@ -21,9 +21,9 @@ const STATUS_OPTIONS = [
   { value: '', label: 'Todas' },
 ]
 
-/** Bandeja del Personal de Atención: sus asignaciones vigentes y las que cerró. */
+/** Mis atenciones: asignaciones vigentes de la persona y las que cerró. */
 export function AttentionInboxPage() {
-  useDocumentTitle('Personal de Atención')
+  useDocumentTitle('Mis atenciones')
   const [params, setParams] = useSearchParams()
   const status = params.get('estado') ?? 'asignada'
   const day = params.get('fecha') ?? ''
@@ -61,12 +61,12 @@ export function AttentionInboxPage() {
           <li>
             <Link to="/">Inicio</Link>
           </li>
-          <li aria-current="page">Personal de Atención</li>
+          <li aria-current="page">Mis atenciones</li>
         </ol>
       </nav>
       <header className="page__header">
-        <p className="page__eyebrow">Vista</p>
-        <h1 className="page__title">Personal de Atención</h1>
+        <p className="page__eyebrow">Operaciones</p>
+        <h1 className="page__title">Mis atenciones</h1>
         <p className="page__lead">Incidencias asignadas a ti y su registro de atención.</p>
       </header>
 
@@ -116,11 +116,11 @@ export function AttentionInboxPage() {
       ) : data.count === 0 ? (
         <div className="empty-state">
           <h2 className="empty-state__title">No hay incidencias en esta vista</h2>
-          <p>Cuando el Planificador te asigne una incidencia, aparecerá aquí.</p>
+          <p>Cuando el Responsable de Área te asigne una incidencia, aparecerá aquí.</p>
         </div>
       ) : (
         <table className="data-table planning-table">
-          <caption className="visually-hidden">Incidencias de Personal de Atención</caption>
+          <caption className="visually-hidden">Mis atenciones</caption>
           <thead>
             <tr>
               <th scope="col">Código</th>
@@ -161,7 +161,7 @@ export function AttentionInboxPage() {
                 </td>
                 <td data-label="Acción">
                   <Link
-                    to={`${ATTENTION_PATH}/incidencias/${item.code}`}
+                    to={attentionIncidentPath(item.code)}
                     className="btn btn--secondary planning-table__action"
                     aria-label={`${item.status === 'asignada' ? 'Atender' : 'Ver'} ${item.code}`}
                   >

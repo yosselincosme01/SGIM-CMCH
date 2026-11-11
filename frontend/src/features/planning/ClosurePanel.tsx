@@ -20,7 +20,7 @@ interface ClosurePanelProps {
 /**
  * Cierre técnico vigente: verificación (Conforme / No conforme) y, tras una
  * verificación No conforme, reapertura con motivo. El backend vuelve a comprobar que
- * quien actúa sea Planificador del área y que la transición sea válida.
+ * quien actúa tenga la función correspondiente en el área y que la transición sea válida.
  */
 export function ClosurePanel({ incident, onSaved, onReload }: ClosurePanelProps) {
   const closure = incident.closure
@@ -42,7 +42,7 @@ export function ClosurePanel({ incident, onSaved, onReload }: ClosurePanelProps)
       for (const [key, messages] of Object.entries(error.fieldErrors)) mapped[key] = messages[0]
       setErrors(Object.keys(mapped).length ? mapped : { form: error.message })
     } else if (isApiError(error) && error.kind === 'forbidden') {
-      setErrors({ form: 'No eres Planificador del área de esta incidencia.' })
+      setErrors({ form: 'No tienes una función habilitada para esta acción en el área de la incidencia.' })
     } else {
       setErrors({ form: isApiError(error) ? error.message : 'No se pudo guardar.' })
     }
@@ -190,7 +190,9 @@ export function ClosurePanel({ incident, onSaved, onReload }: ClosurePanelProps)
         <p className="muted">
           {closure.verification
             ? 'La verificación de este cierre ya está registrada.'
-            : 'Solo el Planificador del área puede verificar este cierre.'}
+            : permissions?.verification_blocked === 'own_intervention'
+              ? 'No puedes verificar este cierre porque realizaste la atención. Debe verificarlo otra persona autorizada del área.'
+              : 'Solo quien tiene la autorización «Verificar conformidad» en el área puede verificar este cierre.'}
         </p>
       )}
     </section>

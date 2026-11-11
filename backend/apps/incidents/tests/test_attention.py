@@ -70,7 +70,8 @@ def _current(incident):
 
 @pytest.fixture
 def planner(make_user):
-    return make_user("plan.prueba", Role.PLANIFICADOR, plans=("ti",))
+    # Planifica y verifica (como los Planificadores existentes tras la migración 0007).
+    return make_user("plan.prueba", Role.PLANIFICADOR, plans=("ti",), verifies=("ti",))
 
 
 @pytest.fixture

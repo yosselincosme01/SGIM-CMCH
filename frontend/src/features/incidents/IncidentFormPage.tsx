@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 
 import { isApiError } from '../../shared/api/errors'
 import { useDocumentTitle } from '../../shared/hooks/useDocumentTitle'
+import { myIncidentPath, PATHS } from '../../shared/paths'
 import { Alert } from '../../shared/ui/Alert'
 import { Button } from '../../shared/ui/Button'
 import { LoadingState } from '../../shared/ui/LoadingState'
@@ -205,10 +206,10 @@ export function IncidentFormPage() {
             <strong>{created.care_unit.name}</strong>. Guarda el código para hacer seguimiento.
           </p>
           <div className="actions">
-            <Link to={`/solicitante/incidencias/${created.code}`} className="btn btn--primary">
+            <Link to={myIncidentPath(created.code)} className="btn btn--primary">
               Ver detalle
             </Link>
-            <Link to="/solicitante/incidencias" className="btn btn--secondary">
+            <Link to={PATHS.myIncidents} className="btn btn--secondary">
               Mis incidencias
             </Link>
             <Button variant="ghost" onClick={startAnother}>
@@ -241,7 +242,7 @@ export function IncidentFormPage() {
     <div className="stack">
       <IncidentBreadcrumb current="Registrar incidencia" />
       <header className="page__header">
-        <p className="page__eyebrow">Solicitante</p>
+        <p className="page__eyebrow">General</p>
         <h1 className="page__title">Registrar incidencia</h1>
         <p className="page__lead">
           Describe lo que observas. No necesitas indicar la causa técnica: el área de soporte
@@ -411,7 +412,7 @@ export function IncidentFormPage() {
         </fieldset>
 
         <div className="form-actions">
-          <Link to="/solicitante" className="btn btn--ghost">
+          <Link to={PATHS.home} className="btn btn--ghost">
             Cancelar
           </Link>
           <Button type="submit" loading={submitting} loadingText="Registrando…">

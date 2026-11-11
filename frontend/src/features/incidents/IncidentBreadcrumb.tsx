@@ -1,5 +1,7 @@
 import { Link } from 'react-router'
 
+import { PATHS } from '../../shared/paths'
+
 interface IncidentBreadcrumbProps {
   current: string
   /** Muestra "Mis incidencias" como nivel intermedio. */
@@ -11,14 +13,11 @@ export function IncidentBreadcrumb({ current, throughList = false }: IncidentBre
     <nav aria-label="Ruta de navegación" className="breadcrumb">
       <ol>
         <li>
-          <Link to="/">Inicio</Link>
-        </li>
-        <li>
-          <Link to="/solicitante">Solicitante</Link>
+          <Link to={PATHS.home}>Inicio</Link>
         </li>
         {throughList && (
           <li>
-            <Link to="/solicitante/incidencias">Mis incidencias</Link>
+            <Link to={PATHS.myIncidents}>Mis incidencias</Link>
           </li>
         )}
         <li aria-current="page">{current}</li>

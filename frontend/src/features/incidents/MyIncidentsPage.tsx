@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router'
 
 import { isApiError } from '../../shared/api/errors'
 import { useDocumentTitle } from '../../shared/hooks/useDocumentTitle'
+import { myIncidentPath, PATHS } from '../../shared/paths'
 import { Alert } from '../../shared/ui/Alert'
 import { Button } from '../../shared/ui/Button'
 import { LoadingState } from '../../shared/ui/LoadingState'
@@ -47,11 +48,11 @@ export function MyIncidentsPage() {
       <IncidentBreadcrumb current="Mis incidencias" />
       <header className="page__header page__header--with-action">
         <div>
-          <p className="page__eyebrow">Solicitante</p>
+          <p className="page__eyebrow">General</p>
           <h1 className="page__title">Mis incidencias</h1>
           <p className="page__lead">Incidencias que registraste, de la más reciente a la más antigua.</p>
         </div>
-        <Link to="/solicitante/incidencias/nueva" className="btn btn--primary">
+        <Link to={PATHS.newIncident} className="btn btn--primary">
           Registrar incidencia
         </Link>
       </header>
@@ -89,7 +90,7 @@ export function MyIncidentsPage() {
               {data.results.map((incident) => (
                 <tr key={incident.code}>
                   <th scope="row" data-label="Código">
-                    <Link to={`/solicitante/incidencias/${incident.code}`} className="data-table__code">
+                    <Link to={myIncidentPath(incident.code)} className="data-table__code">
                       {incident.code}
                     </Link>
                   </th>

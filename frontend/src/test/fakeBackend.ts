@@ -10,7 +10,27 @@ export const TEST_PASSWORD = 'Clave-de-prueba-2026'
 export const IDLE_TIMEOUT = 1800
 export const ABSOLUTE_TIMEOUT = 28800
 
-function makeUser(id: number, username: string, first: string, last: string, roles: string[]) {
+type Functions = { can_plan?: boolean; can_attend?: boolean; can_verify?: boolean }
+
+/**
+ * ``areas``: funciones efectivas por área, como las calcula el backend (ADR 0009). Las
+ * capacidades globales se derivan de ellas.
+ */
+function makeUser(
+  id: number,
+  username: string,
+  first: string,
+  last: string,
+  roles: string[],
+  areas: Record<string, Functions> = {},
+) {
+  const area_functions = Object.entries(areas).map(([area, functions]) => ({
+    area,
+    area_name: area === 'ti' ? 'TI' : area === 'mantenimiento' ? 'Mantenimiento' : 'Ingeniería Clínica',
+    can_plan: functions.can_plan === true,
+    can_attend: functions.can_attend === true,
+    can_verify: functions.can_verify === true,
+  }))
   return {
     id,
     username,
@@ -19,15 +39,41 @@ function makeUser(id: number, username: string, first: string, last: string, rol
     full_name: `${first} ${last}`.trim() || username,
     email: `${username}@example.test`,
     roles,
+    capabilities: {
+      can_plan: area_functions.some((item) => item.can_plan),
+      can_attend: area_functions.some((item) => item.can_attend),
+      can_verify: area_functions.some((item) => item.can_verify),
+    },
+    area_functions,
   } satisfies CurrentUser
 }
 
 export const USERS = {
+  /** Trabajador con funciones básicas: registrar y consultar sus incidencias. */
   solicitante: makeUser(1, 'ana.prueba', 'Ana', 'Prueba', ['solicitante']),
-  multirol: makeUser(2, 'luis.prueba', 'Luis', 'Prueba', ['planificador', 'personal_atencion']),
+  /** Varias capacidades: planifica, verifica y atiende en TI. */
+  multirol: makeUser(2, 'luis.prueba', 'Luis', 'Prueba', ['planificador', 'personal_atencion'], {
+    ti: { can_plan: true, can_verify: true, can_attend: true },
+  }),
+  /** Administrador sin capacidades operativas. */
   administrador: makeUser(3, 'admin.prueba', 'Eva', 'Prueba', ['administrador']),
   sinRoles: makeUser(4, 'sin.roles', '', '', []),
-  tecnico: makeUser(5, 'tec.uno', 'Tomás', 'Prueba', ['personal_atencion']),
+  /** Técnico con permiso de atención en TI. */
+  tecnico: makeUser(5, 'tec.uno', 'Tomás', 'Prueba', ['personal_atencion'], {
+    ti: { can_attend: true },
+  }),
+  /** Solo verifica en TI: sin el rol Responsable de Área ni can_plan (ADR 0008). */
+  verificador: makeUser(6, 'vera.prueba', 'Vera', 'Prueba', ['solicitante'], {
+    ti: { can_verify: true },
+  }),
+  /** Responsable de Área que planifica en TI, sin verificar. */
+  planificador: makeUser(7, 'pablo.prueba', 'Pablo', 'Prueba', ['planificador'], {
+    ti: { can_plan: true },
+  }),
+  /** Administrador con un rol operativo explícito: ve Inicio y Dashboard general. */
+  adminOperativo: makeUser(8, 'marta.prueba', 'Marta', 'Prueba', ['administrador', 'planificador'], {
+    ti: { can_plan: true },
+  }),
 } as const
 
 export interface RecordedRequest {

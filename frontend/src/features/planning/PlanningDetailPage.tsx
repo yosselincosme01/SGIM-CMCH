@@ -17,7 +17,7 @@ import { fetchPlanningOptions, fetchTechnicians, type Technician } from './api'
 import { InterventionHistory } from '../incidents/InterventionHistory'
 import { ClosurePanel } from './ClosurePanel'
 import { PlanningPanel } from './PlanningPanel'
-import { PLANNER_PATH } from './paths'
+import { type PlanningMode, sectionLabel, sectionPath } from './paths'
 import { PlanningBreadcrumb, PriorityBadge } from './PlanningParts'
 
 interface Loaded {
@@ -32,15 +32,19 @@ type LoadState =
   | { status: 'error'; message: string }
   | { status: 'ready' }
 
-/** Detalle de una incidencia del área y panel de planificación (vista Planificador). */
-export function PlanningDetailPage() {
+/**
+ * Detalle de una incidencia del área, compartido por Planificación y Verificaciones
+ * (ADR 0009). En Verificaciones solo se muestra el panel del cierre técnico; las
+ * acciones disponibles las indica siempre el backend (``permissions``).
+ */
+export function PlanningDetailPage({ mode = 'plan' }: { mode?: PlanningMode }) {
   const { code = '' } = useParams()
   const [state, setState] = useState<LoadState>({ status: 'loading' })
   const [incident, setIncident] = useState<IncidentDetail | null>(null)
   const [priorities, setPriorities] = useState<PriorityLevel[]>([])
   const [technicians, setTechnicians] = useState<Technician[] | null>(null)
   const [blocked, setBlocked] = useState(false)
-  useDocumentTitle(incident ? `${incident.code} · Planificador` : 'Planificar incidencia')
+  useDocumentTitle(incident ? `${incident.code} · ${sectionLabel(mode)}` : sectionLabel(mode))
 
   const fetchAll = useCallback(
     async (signal?: AbortSignal): Promise<Loaded> => {
@@ -48,12 +52,12 @@ export function PlanningDetailPage() {
         fetchIncident(code, signal),
         fetchPlanningOptions(signal),
       ])
-      const staff = detail.permissions?.can_plan
+      const staff = mode === 'plan' && detail.permissions?.can_plan
         ? (await fetchTechnicians(detail.code, signal)).results
         : []
       return { detail, priorities: options.priorities, technicians: staff }
     },
-    [code],
+    [code, mode],
   )
 
   function apply(loaded: Loaded): IncidentDetail {
@@ -86,7 +90,7 @@ export function PlanningDetailPage() {
   if (state.status !== 'ready' || !incident) {
     return (
       <div className="stack">
-        <PlanningBreadcrumb current="Detalle" />
+        <PlanningBreadcrumb current="Detalle" mode={mode} />
         <Alert
           tone={state.status === 'not-found' ? 'warning' : 'danger'}
           title={
@@ -103,8 +107,8 @@ export function PlanningDetailPage() {
               : ''}
         </Alert>
         <p>
-          <Link to={PLANNER_PATH} className="btn btn--secondary">
-            Volver a la bandeja
+          <Link to={sectionPath(mode)} className="btn btn--secondary">
+            Volver a {sectionLabel(mode)}
           </Link>
         </p>
       </div>
@@ -113,10 +117,12 @@ export function PlanningDetailPage() {
 
   return (
     <div className="stack" inert={blocked} aria-hidden={blocked || undefined}>
-      <PlanningBreadcrumb current={incident.code} />
+      <PlanningBreadcrumb current={incident.code} mode={mode} />
       <header className="page__header page__header--with-action">
         <div>
-          <p className="page__eyebrow">Planificador · {incident.support_area.name}</p>
+          <p className="page__eyebrow">
+            {sectionLabel(mode)} · {incident.support_area.name}
+          </p>
           <h1 className="page__title">
             {incident.code}
           </h1>
@@ -129,8 +135,16 @@ export function PlanningDetailPage() {
       </header>
 
       <div className="planning-layout">
-        <aside className="planning-layout__panel" aria-label="Planificación">
-          {incident.status === 'cerrada' ? (
+        <aside className="planning-layout__panel" aria-label={sectionLabel(mode)}>
+          {mode === 'verify' && incident.status !== 'cerrada' ? (
+            <section className="detail-card">
+              <h2 className="detail-card__title">Sin cierre técnico vigente</h2>
+              <p className="muted">
+                Esta incidencia no tiene un cierre técnico pendiente de verificación. Su estado
+                actual es «{incident.status_label}».
+              </p>
+            </section>
+          ) : incident.status === 'cerrada' ? (
             <ClosurePanel
               incident={incident}
               onSaved={(updated) => {
@@ -172,8 +186,8 @@ export function PlanningDetailPage() {
       </div>
 
       <p>
-        <Link to={PLANNER_PATH} className="btn btn--secondary">
-          Volver a la bandeja
+        <Link to={sectionPath(mode)} className="btn btn--secondary">
+          Volver a {sectionLabel(mode)}
         </Link>
       </p>
     </div>

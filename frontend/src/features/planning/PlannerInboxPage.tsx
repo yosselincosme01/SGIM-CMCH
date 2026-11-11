@@ -46,9 +46,13 @@ function filtersFrom(params: URLSearchParams): PlanningFilters {
   return filters
 }
 
-/** Bandeja del Planificador: solo incidencias de sus áreas autorizadas (lo aplica el backend). */
+/**
+ * Planificación: incidencias de las áreas donde la persona planifica (``can_plan``).
+ * El backend limita el alcance (``function=plan``). Las verificaciones tienen su propia
+ * sección (ADR 0009).
+ */
 export function PlannerInboxPage() {
-  useDocumentTitle('Planificador')
+  useDocumentTitle('Planificación')
   const [params, setParams] = useSearchParams()
   const filters = filtersFrom(params)
   const filterKey = params.toString()
@@ -62,7 +66,11 @@ export function PlannerInboxPage() {
     (signal: AbortSignal, passive: boolean) =>
       Promise.all([
         fetchPlanningOptions(signal, passive),
-        fetchPlanningInbox(filtersFrom(new URLSearchParams(filterKey)), signal, passive),
+        fetchPlanningInbox(
+          { ...filtersFrom(new URLSearchParams(filterKey)), function: 'plan' },
+          signal,
+          passive,
+        ),
       ]).then(([nextOptions, nextData]) => {
         setOptions(nextOptions)
         setData(nextData)
@@ -118,8 +126,8 @@ export function PlannerInboxPage() {
     <div className="stack">
       <PlanningBreadcrumb />
       <header className="page__header">
-        <p className="page__eyebrow">Vista</p>
-        <h1 className="page__title">Planificador</h1>
+        <p className="page__eyebrow">Operaciones</p>
+        <h1 className="page__title">Planificación</h1>
         <p className="page__lead">
           Prioriza y programa la atención de las incidencias de tus áreas autorizadas.
         </p>
@@ -136,8 +144,8 @@ export function PlannerInboxPage() {
         <LoadingState label="Cargando bandeja…" />
       ) : options.areas.length === 0 ? (
         <div className="empty-state">
-          <h2 className="empty-state__title">No tienes áreas asignadas como Planificador</h2>
-          <p>Solicita al administrador que habilite tu función de Planificador en un área.</p>
+          <h2 className="empty-state__title">No tienes áreas habilitadas para planificar</h2>
+          <p>Solicita al administrador que habilite la función de planificación en tu área.</p>
         </div>
       ) : (
         <>
@@ -192,22 +200,6 @@ export function PlannerInboxPage() {
               >
                 <span className="summary-chip__value">{options.counts.pending}</span>
                 <span className="summary-chip__label">Pendientes de atención</span>
-              </button>
-            </li>
-            <li>
-              <button
-                type="button"
-                className="summary-chip"
-                aria-pressed={filters.queue === 'verification'}
-                onClick={() =>
-                  update({
-                    queue: filters.queue === 'verification' ? '' : 'verification',
-                    status: '',
-                  })
-                }
-              >
-                <span className="summary-chip__value">{options.counts.to_verify}</span>
-                <span className="summary-chip__label">Cerradas por verificar</span>
               </button>
             </li>
           </ul>
@@ -303,7 +295,7 @@ export function PlannerInboxPage() {
               </p>
               <table className="data-table planning-table">
                 <caption className="visually-hidden">
-                  Bandeja del Planificador, página {page} de {totalPages}
+                  Planificación, página {page} de {totalPages}
                 </caption>
                 <thead>
                   <tr>
@@ -404,7 +396,8 @@ export function PlannerInboxPage() {
 }
 
 function actionLabel(item: PlanningItem): string {
-  if (item.status === 'cerrada') return item.pending_verification ? 'Verificar' : 'Ver'
+  // La verificación se hace desde Verificaciones (ADR 0009).
+  if (item.status === 'cerrada') return 'Ver'
   return item.assignment ? 'Ver y reprogramar' : 'Planificar'
 }
 

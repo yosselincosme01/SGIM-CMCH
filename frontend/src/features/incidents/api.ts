@@ -103,7 +103,10 @@ export interface Intervention {
   parts_required_detail: string
   unresolved_reason: string
   observations: string
-  photos: IncidentAttachment[]
+  /** Ausente en la consulta del Administrador, que no recibe evidencia (ADR 0009). */
+  photos?: IncidentAttachment[]
+  /** Solo en la consulta del Administrador: cuántas fotografías tiene. */
+  photo_count?: number
   is_closure: boolean
   verification: Verification | null
   created_at: string
@@ -117,11 +120,17 @@ export interface Closure {
   verification: Verification | null
 }
 
+/**
+ * Acciones disponibles para quien consulta, calculadas por el backend según sus
+ * funciones en el área (ADR 0008). La interfaz solo las refleja.
+ */
 export interface IncidentPermissions {
   can_plan: boolean
   can_intervene: boolean
   can_verify: boolean
   can_reopen: boolean
+  /** Tiene la función de verificar, pero ejecutó la intervención de cierre. */
+  verification_blocked?: 'own_intervention' | null
 }
 
 export interface IncidentDetail extends Omit<IncidentSummary, 'has_attachments'> {

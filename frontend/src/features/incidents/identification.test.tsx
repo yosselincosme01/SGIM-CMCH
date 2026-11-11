@@ -66,7 +66,7 @@ function signInSolicitante() {
 
 async function openForm() {
   signInSolicitante()
-  const utils = renderApp('/solicitante/incidencias/nueva')
+  const utils = renderApp('/incidencias/nueva')
   await screen.findByRole('heading', { name: 'Registrar incidencia' })
   const { user } = utils
   await user.selectOptions(screen.getByLabelText(/UPS o servicio/), '[DEMO] Emergencia')
@@ -401,7 +401,7 @@ describe('identificación en el detalle', () => {
       qr_code: url,
     })
     signInSolicitante()
-    renderApp('/solicitante/incidencias/INC-2026-000001')
+    renderApp('/incidencias/INC-2026-000001')
 
     expect(await screen.findByTestId('qr-code')).toHaveTextContent(url)
     expect(within(screen.getByTestId('qr-code')).queryByRole('link')).toBeNull()
@@ -415,7 +415,7 @@ describe('identificación en el detalle', () => {
       qr_code: '',
     })
     signInSolicitante()
-    renderApp('/solicitante/incidencias/INC-2026-000001')
+    renderApp('/incidencias/INC-2026-000001')
 
     expect(
       await screen.findByText('Sin dato de identificación (incidencia anterior)'),

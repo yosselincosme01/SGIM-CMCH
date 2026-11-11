@@ -2,7 +2,7 @@
 
 from rest_framework.permissions import BasePermission
 
-from .roles import Role, has_role
+from .roles import OPERATIONAL_ROLES, Role, has_role
 
 
 class HasAnyRole(BasePermission):
@@ -32,3 +32,6 @@ IsAdministrador = require_roles(Role.ADMINISTRADOR)
 IsSolicitante = require_roles(Role.SOLICITANTE)
 IsPlanificador = require_roles(Role.PLANIFICADOR)
 IsPersonalAtencion = require_roles(Role.PERSONAL_ATENCION)
+
+# Cualquier cuenta operativa activa (registro y seguimiento de sus propias incidencias).
+IsOperationalUser = require_roles(*OPERATIONAL_ROLES)

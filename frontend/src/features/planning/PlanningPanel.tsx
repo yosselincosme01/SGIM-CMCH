@@ -138,7 +138,7 @@ export function PlanningPanel({
     if (isApiError(error) && error.status === 409) {
       setNotice({
         tone: 'warning',
-        text: 'Otro Planificador actualizó esta incidencia. Se cargaron los datos actuales; revisa y vuelve a guardar.',
+        text: 'Otra persona actualizó esta incidencia. Se cargaron los datos actuales; revisa y vuelve a guardar.',
       })
       void onReload()
       return

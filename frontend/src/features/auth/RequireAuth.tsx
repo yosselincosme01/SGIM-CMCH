@@ -3,8 +3,8 @@ import { Navigate, Outlet, useLocation } from 'react-router'
 
 import { Button } from '../../shared/ui/Button'
 import { FullPageStatus } from '../../shared/ui/FullPageStatus'
-import type { BackendRole } from './api'
-import { hasRole } from './roles'
+import { PATHS } from '../../shared/paths'
+import { canAccess, type Feature } from '../navigation/access'
 import { useAuth } from './useAuth'
 
 export interface LoginRedirectState {
@@ -35,12 +35,12 @@ export function RequireAuth() {
 }
 
 /**
- * Restringe una vista a un rol. Es solo navegación: la autorización real la
- * aplica el backend en cada endpoint.
+ * Protege una funcionalidad según los permisos efectivos del usuario (ADR 0009). Es
+ * solo navegación: la autorización real la aplica el backend en cada endpoint.
  */
-export function RequireRole({ role, children }: { role: BackendRole; children: ReactNode }) {
+export function RequireAccess({ feature, children }: { feature: Feature; children: ReactNode }) {
   const { state } = useAuth()
   if (state.status !== 'authenticated') return null
-  if (!hasRole(state.user, role)) return <Navigate to="/sin-acceso" replace />
+  if (!canAccess(state.user, feature)) return <Navigate to={PATHS.forbidden} replace />
   return <>{children}</>
 }

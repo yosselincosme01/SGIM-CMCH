@@ -14,8 +14,17 @@ import type {
   SupportAreaOption,
 } from '../incidents/api'
 
+/** Funciones del usuario en un área (ADR 0008): independientes entre sí. */
+export interface AreaFunctions {
+  area: string
+  can_plan: boolean
+  can_verify: boolean
+}
+
 export interface PlanningOptions {
+  /** Áreas donde planifica o verifica. */
   areas: SupportAreaOption[]
+  functions?: AreaFunctions[]
   priorities: PriorityLevel[]
   counts: {
     unprioritized: number
@@ -53,6 +62,8 @@ export interface PlanningFilters {
   status?: string
   priority?: string
   scheduled_on?: string
+  /** Función desde la que se consulta (ADR 0009): Planificación o Verificaciones. */
+  function?: 'plan' | 'verify'
   /** Colas de trabajo: pendientes o por verificar. */
   queue?: string
   q?: string

@@ -22,7 +22,7 @@ function writes() {
 
 async function openDetail(code: string) {
   signInPlanner()
-  const utils = renderApp(`/planificador/incidencias/${code}`)
+  const utils = renderApp(`/planificacion/incidencias/${code}`)
   await screen.findByRole('heading', { name: code })
   await screen.findByRole('heading', { name: /Programar atención|Reprogramar atención/ })
   return utils
@@ -40,18 +40,19 @@ describe('fechas en hora de Lima', () => {
 })
 
 describe('denominación y navegación', () => {
-  it('el rol se muestra como Planificador en el inicio y en el título', async () => {
+  it('la función se muestra como "Planificación", sin el nombre interno del rol', async () => {
     signInPlanner()
     renderApp('/')
 
-    expect(await screen.findByRole('link', { name: /Planificador/ })).toHaveAttribute(
+    const nav = await screen.findByRole('navigation', { name: 'Menú principal' })
+    expect(within(nav).getByRole('link', { name: 'Planificación' })).toHaveAttribute(
       'href',
-      '/planificador',
+      '/planificacion',
     )
-    expect(screen.queryByText(/Responsable de [ÁA]rea/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Planificador/)).not.toBeInTheDocument()
   })
 
-  it('la ruta anterior redirige a /planificador conservando el resto de la ruta', async () => {
+  it('la ruta anterior redirige a /planificacion conservando el resto de la ruta', async () => {
     const incident = planningBackend.seed()
     signInPlanner()
     renderApp(`/responsable-area/incidencias/${incident.code}`)
@@ -63,12 +64,12 @@ describe('denominación y navegación', () => {
     signInPlanner()
     renderApp('/responsable-area')
 
-    expect(await screen.findByRole('heading', { name: 'Planificador', level: 1 })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Planificación', level: 1 })).toBeInTheDocument()
   })
 
-  it('sin el rol planificador la vista no está disponible', async () => {
+  it('sin la función de planificar la vista no está disponible', async () => {
     backend.signIn(USERS.solicitante)
-    renderApp('/planificador')
+    renderApp('/planificacion')
 
     expect(
       await screen.findByRole('heading', { name: 'No tienes acceso a esta vista' }),
@@ -76,12 +77,12 @@ describe('denominación y navegación', () => {
   })
 })
 
-describe('bandeja del Planificador', () => {
+describe('Planificación', () => {
   it('lista las incidencias con prioridad en texto, estado y técnico', async () => {
     planningBackend.seed()
     planningBackend.seed({ priority: { code: 'alta', name: 'Alta', order: 2, description: '', is_provisional: true } })
     signInPlanner()
-    renderApp('/planificador')
+    renderApp('/planificacion')
 
     const table = await screen.findByRole('table')
     const rows = within(table).getAllByRole('row').slice(1)
@@ -91,7 +92,7 @@ describe('bandeja del Planificador', () => {
     expect(within(rows[0]).getByText('Sin asignar')).toBeInTheDocument()
     expect(within(rows[0]).getByRole('link', { name: /Planificar INC-/ })).toHaveAttribute(
       'href',
-      expect.stringMatching(/^\/planificador\/incidencias\/INC-/),
+      expect.stringMatching(/^\/planificacion\/incidencias\/INC-/),
     )
     expect(screen.getByText(/Niveles de prioridad provisionales/)).toBeInTheDocument()
   })
@@ -99,7 +100,7 @@ describe('bandeja del Planificador', () => {
   it('el indicador "Sin prioridad" filtra la bandeja', async () => {
     planningBackend.seed()
     signInPlanner()
-    const { user } = renderApp('/planificador')
+    const { user } = renderApp('/planificacion')
 
     await user.click(await screen.findByRole('button', { name: /Sin prioridad/ }))
 
@@ -127,17 +128,17 @@ describe('bandeja del Planificador', () => {
       ),
     )
     signInPlanner()
-    renderApp('/planificador')
+    renderApp('/planificacion')
 
     expect(
-      await screen.findByRole('heading', { name: 'No tienes áreas asignadas como Planificador' }),
+      await screen.findByRole('heading', { name: 'No tienes áreas habilitadas para planificar' }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
   })
 
   it('muestra un estado vacío', async () => {
     signInPlanner()
-    renderApp('/planificador')
+    renderApp('/planificacion')
 
     expect(await screen.findByRole('heading', { name: 'No hay incidencias' })).toBeInTheDocument()
   })
@@ -249,7 +250,7 @@ describe('programación de la atención', () => {
       permissions: { can_plan: false, can_intervene: false, can_verify: false, can_reopen: false },
     })
     signInPlanner()
-    renderApp(`/planificador/incidencias/${incident.code}`)
+    renderApp(`/planificacion/incidencias/${incident.code}`)
 
     expect(
       await screen.findByText('No puedes planificar esta incidencia en su estado actual.'),
@@ -331,7 +332,7 @@ describe('reprogramación y reasignación', () => {
     expect(screen.getByText('Motivo: El técnico está de licencia')).toBeInTheDocument()
   })
 
-  it('si otro Planificador cambió la incidencia (409) avisa y conserva lo escrito', async () => {
+  it('si otra persona cambió la incidencia (409) avisa y conserva lo escrito', async () => {
     planningBackend.conflictNext = true
     const incident = seedAssigned()
     const { user } = await openDetail(incident.code)
@@ -340,7 +341,7 @@ describe('reprogramación y reasignación', () => {
     await user.click(screen.getByRole('button', { name: 'Guardar reprogramación' }))
     await user.click(await screen.findByRole('button', { name: 'Confirmar cambios' }))
 
-    expect(await screen.findByText(/Otro Planificador actualizó esta incidencia/)).toBeInTheDocument()
+    expect(await screen.findByText(/Otra persona actualizó esta incidencia/)).toBeInTheDocument()
     expect(screen.getByLabelText(/Motivo de la reprogramación/)).toHaveValue(
       'Cambio por disponibilidad',
     )
@@ -355,7 +356,7 @@ describe('vista del solicitante', () => {
       scheduled_at: '2030-01-15T09:30:00-05:00',
     })
     backend.signIn(USERS.solicitante)
-    renderApp('/solicitante/incidencias/INC-2026-000001')
+    renderApp('/incidencias/INC-2026-000001')
 
     expect(await screen.findByTestId('scheduled-at')).toHaveTextContent(/15 ene.*9:30\s*a/)
     expect(screen.queryByText(/Indicaciones internas/)).not.toBeInTheDocument()

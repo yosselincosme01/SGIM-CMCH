@@ -40,7 +40,7 @@ interface PlanningState {
   technicians: Technician[]
   requests: PlanningRequest[]
   nextAssignmentId: number
-  /** El próximo POST de programación responde 409 (otro Planificador lo cambió). */
+  /** El próximo POST de programación responde 409 (otra persona lo cambió). */
   conflictNext: boolean
   serverErrors: Record<string, string[]> | null
 }
@@ -105,8 +105,10 @@ export const planningBackend: PlanningState & {
   },
 }
 
+/** Como el backend: rol Planificador o función de verificar en algún área (ADR 0008). */
 function isPlanner() {
-  return backend.sessionUser?.roles.includes('planificador') ?? false
+  const user = backend.sessionUser
+  return Boolean(user?.roles.includes('planificador') || user?.capabilities?.can_verify)
 }
 
 function guard(): Response | null {
@@ -196,6 +198,16 @@ export const planningHandlers = [
     await record(request)
     const params = new URL(request.url).searchParams
     let results = [...planningBackend.incidents]
+    // Como el backend (ADR 0009): cada función ve solo lo suyo.
+    const capabilities = backend.sessionUser?.capabilities
+    const fn = params.get('function')
+    if (fn === 'plan' && !capabilities?.can_plan) results = []
+    if (fn === 'verify') {
+      results = capabilities?.can_verify ? results.filter((item) => item.status === 'cerrada') : []
+    }
+    if (params.get('queue') === 'verification') {
+      results = results.filter((item) => item.closure?.pending_verification)
+    }
     const priority = params.get('priority')
     if (priority === 'none') results = results.filter((item) => !item.priority)
     else if (priority) results = results.filter((item) => item.priority?.code === priority)
@@ -218,7 +230,7 @@ export const planningHandlers = [
   // Detalle del personal del área. Si la incidencia no está aquí, sigue al siguiente handler.
   http.get(`${API}/incidents/:code/`, ({ params }) => {
     const roles = backend.sessionUser?.roles ?? []
-    if (!roles.includes('planificador') && !roles.includes('personal_atencion')) return undefined
+    if (!isPlanner() && !roles.includes('personal_atencion')) return undefined
     const incident = find(params.code)
     if (!incident) return undefined
     return HttpResponse.json(incident)
@@ -272,7 +284,7 @@ export const planningHandlers = [
     if (planningBackend.conflictNext || (current?.id ?? null) !== body.expected_assignment) {
       planningBackend.conflictNext = false
       return HttpResponse.json(
-        { detail: 'Otro Planificador actualizó esta incidencia.' },
+        { detail: 'Otra persona actualizó esta incidencia.' },
         { status: 409 },
       )
     }

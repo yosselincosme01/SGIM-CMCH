@@ -7,6 +7,7 @@ api_v1_patterns = [
     path("", include("apps.core.urls")),
     path("", include("apps.accounts.urls")),
     path("", include("apps.incidents.urls")),
+    path("", include("apps.administration.urls")),
 ]
 
 urlpatterns = [

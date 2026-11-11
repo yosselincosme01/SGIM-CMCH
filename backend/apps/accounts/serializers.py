@@ -28,11 +28,38 @@ class LoginSerializer(serializers.Serializer):
 class CurrentUserSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField(read_only=True)
     roles = serializers.SerializerMethodField()
+    capabilities = serializers.SerializerMethodField()
+    area_functions = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ("id", "username", "first_name", "last_name", "full_name", "email", "roles")
+        fields = (
+            "id",
+            "username",
+            "first_name",
+            "last_name",
+            "full_name",
+            "email",
+            "roles",
+            "capabilities",
+            "area_functions",
+        )
         read_only_fields = fields
 
     def get_roles(self, user) -> list[str]:
         return get_roles(user)
+
+    def get_capabilities(self, user) -> dict[str, bool]:
+        """
+        Funciones efectivas por área (ADR 0008), solo para adaptar la interfaz. El
+        backend vuelve a validar cada acción con el área concreta.
+        """
+        from apps.incidents.selectors import effective_capabilities
+
+        return effective_capabilities(user)
+
+    def get_area_functions(self, user) -> list[dict]:
+        """Funciones efectivas por área (ADR 0009). Solo para mostrar y navegar."""
+        from apps.incidents.selectors import effective_area_functions
+
+        return effective_area_functions(user)

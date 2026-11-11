@@ -141,12 +141,17 @@ function summary(incident: IncidentDetail) {
 
 const API = '*/api/v1'
 
+const OPERATIONAL = ['solicitante', 'planificador', 'personal_atencion']
+const isOperational = (user: { roles: readonly string[] }) =>
+  user.roles.some((role) => OPERATIONAL.includes(role))
+
 export const incidentHandlers = [
   http.get(`${API}/incidents/options/`, () => {
     if (backend.networkDown) return HttpResponse.error()
     const user = backend.sessionUser
     if (!user) return unauthenticated()
-    if (!user.roles.includes('solicitante')) {
+    // ADR 0008: cualquier rol operativo registra incidencias (no el Administrador).
+    if (!isOperational(user)) {
       return HttpResponse.json({ detail: 'No tiene permiso.' }, { status: 403 })
     }
     return HttpResponse.json({ care_units: CARE_UNITS, support_areas: SUPPORT_AREAS })

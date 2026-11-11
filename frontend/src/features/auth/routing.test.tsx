@@ -7,13 +7,13 @@ import { safeRedirectTarget } from './redirect'
 
 describe('rutas protegidas', () => {
   it('sin sesión, redirige al login y después vuelve a la ruta pedida', async () => {
-    const { user } = renderApp('/solicitante')
+    const { user } = renderApp('/incidencias')
 
     expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument()
 
     await fillLogin(user, 'ana.prueba')
 
-    expect(await screen.findByRole('heading', { name: 'Solicitante' })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Mis incidencias', level: 1 })).toBeInTheDocument()
   })
 
   it('restaura la sesión al recargar con una petición pasiva', async () => {
@@ -60,7 +60,7 @@ describe('rutas protegidas', () => {
 
   it('una vista de otro rol muestra "sin acceso"', async () => {
     backend.signIn(USERS.solicitante)
-    renderApp('/administrador')
+    renderApp('/administracion')
 
     expect(
       await screen.findByRole('heading', { name: 'No tienes acceso a esta vista' }),
@@ -77,8 +77,8 @@ describe('rutas protegidas', () => {
 
 describe('redirección segura tras el login', () => {
   it.each([
-    ['/solicitante', '/solicitante'],
-    ['/planificador?x=1', '/planificador?x=1'],
+    ['/incidencias', '/incidencias'],
+    ['/planificacion?x=1', '/planificacion?x=1'],
     ['https://evil.example', '/'],
     ['//evil.example', '/'],
     ['/\\evil.example', '/'],

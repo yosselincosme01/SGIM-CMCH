@@ -433,18 +433,33 @@ class IncidentDetailSerializer(_IncidentDetailBase):
         return AssignmentSerializer(current).data if current else None
 
     def get_permissions(self, incident) -> dict:
+        """
+        Acciones disponibles para quien consulta, calculadas en el servidor (ADR 0008).
+        Cada función es independiente: planificar no implica verificar, ni al revés.
+        """
         user = self.context["request"].user
-        planner = selectors.can_plan_area(user, incident.support_area)
-        verification = selectors.closing_verification(incident) if planner else None
+        area = incident.support_area
+        planner = selectors.can_plan_area(user, area)
+        verifier = selectors.can_verify_area(user, area)
         closed = incident.status == Incident.Status.CERRADA
+        verification = (
+            selectors.closing_verification(incident) if closed and (planner or verifier) else None
+        )
+        own_closure = (
+            verifier and closed and selectors.executed_closing_intervention(user, incident)
+        )
         return {
             "can_plan": planner and incident.status in selectors.PLANNABLE_STATUSES,
             "can_intervene": selectors.can_intervene(user, incident),
-            "can_verify": planner and closed and verification is None,
-            "can_reopen": planner
+            "can_verify": verifier and closed and verification is None and not own_closure,
+            "can_reopen": (planner or verifier)
             and closed
             and verification is not None
             and verification.result == IncidentVerification.Result.NOT_CONFORMING,
+            # Motivo por el que no puede verificar aunque tenga la función en el área.
+            "verification_blocked": (
+                "own_intervention" if own_closure and verification is None else None
+            ),
         }
 
 

@@ -1,6 +1,7 @@
 # ADR 0004: Planificación y asignación de incidencias
 
 - **Estado:** propuesto. Implementado en `feature/incident-planning`. Las reglas de
+- **Actualizado por:** [ADR 0008](0008-funciones-independientes-por-area.md). Verificar conformidad es una función propia (`can_verify`), separada de planificar y sin exigir el rol Planificador, y toda cuenta operativa registra incidencias.
   prioridad, plazos, reasignación y estados están **pendientes de validar con Walter**.
 - **Fecha:** 2026-11-06
 - **Relacionado:** [ADR 0002](0002-autenticacion-y-roles.md), [ADR 0003](0003-incidencias.md)
