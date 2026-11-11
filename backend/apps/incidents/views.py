@@ -3,7 +3,7 @@ from datetime import date, datetime, time, timedelta
 from django.contrib.auth import get_user_model
 from django.core.exceptions import PermissionDenied as DjangoPermissionDenied
 from django.core.exceptions import ValidationError as DjangoValidationError
-from django.db.models import F, Min, Q
+from django.db.models import Exists, F, Min, OuterRef, Q
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -19,7 +19,7 @@ from apps.accounts.permissions import IsOperationalUser, IsPersonalAtencion, IsP
 from apps.catalogs.models import CareUnit
 
 from . import attention_services, home, planning_services, selectors, services, survey_services
-from .models import Incident, PriorityLevel, SupportArea
+from .models import Incident, IncidentAttachment, PriorityLevel, SupportArea
 from .serializers import (
     AttentionListSerializer,
     CareUnitOptionSerializer,
@@ -28,6 +28,7 @@ from .serializers import (
     IncidentListSerializer,
     InterventionInputSerializer,
     LimaDateTimeField,
+    OwnIncidentListSerializer,
     PlanningInputSerializer,
     PlanningListSerializer,
     PriorityInputSerializer,
@@ -155,16 +156,27 @@ class IncidentListCreateView(generics.ListAPIView):
             return [IsAuthenticated(), IsOperationalUser()]
         return [IsAuthenticated()]
 
+    def get_serializer_class(self):
+        # Solo las incidencias propias incluyen la vista previa de la descripción.
+        if self.request.query_params.get("scope", "mine") == "mine":
+            return OwnIncidentListSerializer
+        return IncidentListSerializer
+
     def get_queryset(self):
         scope = self.request.query_params.get("scope", "mine")
+        # ``has_attachments`` se calcula en la misma consulta (sin una consulta por fila).
+        attachments = Exists(IncidentAttachment.objects.filter(incident=OuterRef("pk")))
         if scope == "mine":
             return selectors.own_incidents(self.request.user).annotate(
-                survey_pending_flag=selectors.survey_pending_expression()
+                survey_pending_flag=selectors.survey_pending_expression(),
+                has_attachments_flag=attachments,
             )
         if scope == "area":
             if not selectors.can_view_area_inbox(self.request.user):
                 raise PermissionDenied("No tienes una función autorizada en ningún área.")
-            return selectors.area_incidents(self.request.user)
+            return selectors.area_incidents(self.request.user).annotate(
+                has_attachments_flag=attachments
+            )
         raise PermissionDenied("Ámbito de consulta no válido.")
 
     def post(self, request: Request) -> Response:
