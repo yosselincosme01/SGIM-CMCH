@@ -106,8 +106,10 @@ describe('logotipo institucional en las vistas internas', () => {
 
 describe('tokens y estilos de marca', () => {
   it('la cuadrícula de la barra ubica el logotipo a la izquierda en todos los tamaños', () => {
+    // Escritorio y móvil: una sola fila, con el logotipo siempre primero.
+    // Escritorio: logotipo, identidad y avatar. Tabletas y móviles: se añade el botón de menú.
+    expect(css).toMatch(/grid-template-areas:\s*'logo identity controls'/)
     expect(css).toMatch(/grid-template-areas:\s*'logo identity toggle controls'/)
-    expect(css).toMatch(/grid-template-areas:\s*'logo identity toggle'\s*'controls controls controls'/)
     expect(css).not.toMatch(/'toggle logo|'identity controls logo'|'identity logo'/)
   })
 

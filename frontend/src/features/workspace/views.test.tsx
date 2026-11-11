@@ -10,7 +10,8 @@ describe('cierre de sesión', () => {
     document.cookie = `csrftoken=${backend.csrfToken}; path=/`
     const { user } = renderApp('/incidencias')
 
-    await user.click(await screen.findByRole('button', { name: 'Cerrar sesión' }))
+    await user.click(await screen.findByRole('button', { name: /Menú de perfil/ }))
+    await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
 
     expect(await screen.findByText('Cerraste sesión correctamente')).toBeInTheDocument()
     const logout = backend.requestsTo('/auth/logout/', 'POST')
@@ -28,6 +29,7 @@ describe('cierre de sesión', () => {
 
     await screen.findByRole('heading', { name: 'Hola, Ana' })
     backend.networkDown = true
+    await user.click(screen.getByRole('button', { name: /Menú de perfil/ }))
     await user.click(screen.getByRole('button', { name: 'Cerrar sesión' }))
 
     expect(await screen.findByText('Cerramos la sesión en este equipo')).toBeInTheDocument()

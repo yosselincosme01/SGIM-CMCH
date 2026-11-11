@@ -130,8 +130,8 @@ Todas las secciones reutilizan endpoints existentes, salvo la consulta global.
   - el logotipo institucional sigue en el extremo izquierdo;
   - le siguen la identidad SGIM-CMCH y el botón del menú;
   - a la derecha, el nombre de la persona (enlace a Mi cuenta) y "Cerrar sesión".
-- **Escritorio:** menú lateral con grupos titulados. Se puede ocultar, y la preferencia
-  se recuerda en el equipo (`localStorage`, solo una preferencia visual).
+- **Escritorio:** menú lateral siempre visible, con grupos titulados, ancho fijo y
+  desplazamiento vertical propio. No hay botón para ocultarlo.
 - **Tabletas y móviles (hasta 56rem):** el menú es un panel superpuesto.
   - Se abre con el botón "Menú", y el foco pasa a la primera opción.
   - Se cierra con Escape (el foco vuelve al botón), tocando fuera o al elegir una opción.
