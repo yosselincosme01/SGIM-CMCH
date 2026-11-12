@@ -204,7 +204,7 @@
 }
 
 .confirmation__code {
-  font-size: clamp(1.6rem, 1.2rem + 2vw, 2.25rem);
+  font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem);
   font-weight: 800;
   letter-spacing: 0.04em;
   color: var(--color-primary);
@@ -222,19 +222,26 @@
 
 .data-table th,
 .data-table td {
-  padding: var(--space-3) var(--space-4);
+  padding: var(--space-2) var(--space-3);
   text-align: left;
   border-bottom: 1px solid var(--color-border);
 }
 
 .data-table thead th {
   background: var(--color-surface-muted);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .data-table__code {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+/* Con espacio suficiente, el código del ticket va en una sola línea (filas más bajas). */
+@media (min-width: 75rem) {
+  .data-table__code {
+    white-space: nowrap;
+  }
 }
 
 @media (max-width: 40rem) {
@@ -310,14 +317,14 @@
 }
 
 .detail-card {
-  padding: var(--space-5) var(--space-6);
+  padding: var(--space-4) var(--space-5);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
 }
 
 .detail-card__title {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   margin-bottom: var(--space-4);
 }
 

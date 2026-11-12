@@ -169,10 +169,3 @@ export function activeItemPath(menu: MenuGroup[], pathname: string): string | nu
 export function hasAnyFeature(user: AccessUser): boolean {
   return buildMenu(user).some((group) => group.items.some((item) => item.path !== PATHS.home))
 }
-
-/** Etiquetas visibles de las funciones por área (sin nombres de roles internos). */
-export const FUNCTION_LABELS = {
-  can_plan: 'Planificación',
-  can_attend: 'Registrar atenciones',
-  can_verify: 'Verificaciones',
-} as const

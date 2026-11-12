@@ -175,16 +175,37 @@ describe('layout unificado', () => {
     )
   })
 
-  it('«Ver perfil» lleva a Mi cuenta con las funciones por área, sin roles internos', async () => {
+  it('«Ver perfil» lleva a Mi cuenta con los datos personales, sin roles ni permisos', async () => {
     const { user } = await openApp(USERS.multirol)
 
     await user.click(screen.getByRole('button', { name: 'Menú de perfil de Luis Prueba' }))
     await user.click(screen.getByRole('link', { name: 'Ver perfil' }))
 
     expect(await screen.findByRole('heading', { name: 'Mi cuenta', level: 1 })).toBeInTheDocument()
-    const row = screen.getByRole('row', { name: /TI/ })
-    expect(row).toHaveTextContent('Planificación · Registrar atenciones · Verificaciones')
-    expect(screen.queryByText(/planificador|personal_atencion/)).not.toBeInTheDocument()
+    const card = screen.getByRole('region', { name: 'Datos personales' })
+    const data = within(card)
+      .getAllByRole('term')
+      .map((term) => `${term.textContent}: ${term.nextElementSibling?.textContent}`)
+    expect(data).toEqual([
+      'Nombre: Luis Prueba',
+      `Usuario: ${USERS.multirol.username}`,
+      `Correo electrónico: ${USERS.multirol.username}@example.test`,
+    ])
+    expect(card).toHaveTextContent('Si necesitas actualizar tus datos, contacta al administrador del sistema.')
+    // Ni roles internos ni funciones por área o capacidades técnicas.
+    expect(screen.queryByText(/planificador|personal_atencion|administrador$/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Funciones|Planificación ·|Verificaciones ·|can_/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+  })
+
+  it('Mi cuenta sin correo registrado no muestra ese dato', async () => {
+    const { user } = await openApp({ ...USERS.solicitante, email: '' })
+
+    await user.click(screen.getByRole('button', { name: /Menú de perfil/ }))
+    await user.click(screen.getByRole('link', { name: 'Ver perfil' }))
+
+    const card = await screen.findByRole('region', { name: 'Datos personales' })
+    expect(within(card).getAllByRole('term').map((term) => term.textContent)).toEqual(['Nombre', 'Usuario'])
   })
 
   it('en escritorio el menú lateral está siempre visible y no hay botón para ocultarlo', async () => {
